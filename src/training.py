@@ -28,7 +28,7 @@ ACCESS_TOKEN='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'
 
 # Linear control wrapper class
 class LinearControlWrapper(torch.nn.Module):
-    def __init__(self, base_layer: nn.Module, linear_probe: nn.Module, name="", gamma=0.1, thres=0.05):
+    def __init__(self, base_layer: nn.Module, linear_probe: nn.Module, name="", gamma=0.01, thres=0.05):
         """
         W shape: d x 2
         """
@@ -38,28 +38,41 @@ class LinearControlWrapper(torch.nn.Module):
 
         # Probe-related parameters
         self.gamma = gamma
+        self.probe = linear_probe.eval().half()
         self.W = linear_probe.weight # linear probe
+        self.w1 = self.W[0,:].detach().cpu().numpy()
+        self.w2 = self.W[1,:].detach().cpu().numpy()
         self.b = linear_probe.bias
-        self.w = (self.W[1,:] - self.W[0,:]).detach().cpu().numpy() # as defined in algo w_2 - w_1
+        self.w = self.w2 - self.w1 # as defined in algo w_2 - w_1
         self.w_norm = np.linalg.norm(self.w) # python float
+        self.w2T_w = self.w2 @ self.w
+
+        # Logging
+        self.toxic_sequences = []
+        self.toxicity_log = []
 
     def forward(self, x, *args, **kwargs):
         print('attention_mask' in kwargs)
-        print(x)
         x_seq, x_metadata = self.base_layer(x, *args, **kwargs)
-        print(x_seq)
-        print(kwargs)
-        # TODO: why is the next iteration of generation taking a shape of 2 x 1 x d??
+        print(x_seq.shape) #need this shape to be the same as the altered shape
+
+        # Why is the next iteration of generation taking a shape of 2 x 1 x d??
         # Now update the last token representation
-        sequence_len, _ = torch.max(kwargs['position_ids'].cpu(), dim=1)
+        last_token_idx = kwargs['position_ids'].cpu().size(1) - 1
+
         pdb.set_trace()
-        x_seq[torch.arange(x_seq.size(0)),sequence_len] += self.optimal_theta(
-            x_seq[torch.arange(x_seq.size(0)),sequence_len] # get last token rep
+        x_seq[torch.arange(x_seq.size(0)),last_token_idx] += self.optimal_theta(
+            x_seq[torch.arange(x_seq.size(0)),last_token_idx] # get last token rep
         )
         print('Adjustment done')
         print(x_seq.shape)
-        pdb.set_trace()
+
+        # Add to toxicity log
+        eval_probe = self.probe(x_seq[torch.arange(x_seq.size(0)),last_token_idx])
+        self.toxicity_log.append(nn.functional.softmax(eval_probe, dim=-1)[:,0].detach().cpu().numpy()) # this is the probscore
+
         return x_seq, x_metadata
+
     
     def optimal_theta(self, x):
         """Finds the optimal steering vector.
@@ -72,26 +85,36 @@ class LinearControlWrapper(torch.nn.Module):
         """
         theta = torch.zeros(x.shape) # batch size x d
         x = x.detach().cpu().numpy()
-        pdb.set_trace()
 
         # Classified as toxic when (w_2 - w_1).T x < 0
         toxic_sequences_idx = np.where(x @ self.w < self.thres)
+        self.toxic_sequences.append(toxic_sequences_idx)
+
         if not len(toxic_sequences_idx[0]): 
             print('No toxic sequences')
             return theta.to(self.W.device)
+        
+        print("Check which sequences are toxic")
+        pdb.set_trace()
 
         x_toxic = x[toxic_sequences_idx] # index into the toxic ones only
         
-        function = lambda l: l * np.exp(l * self.w_norm**2 + x_toxic @ self.w) + l - 1/self.gamma
-
+        root_function = lambda l: l * np.exp(l * self.w_norm**2 + x_toxic @ self.w) + l - 1/self.gamma
+        # min_function = lambda l: self.gamma * l**2 / 2 * self.w_norm**2 - l * self.w2T_w + np.log(
+            # np.exp(x_toxic @ self.w1 + l * (self.w1 @ self.w)) + \
+                #    np.exp(x_toxic  @ self.w2 + l * (self.w2 @ self.w))
+            # )
+        
         # Binary search for initial condition
-        x0 = np.ones(len(toxic_sequences_idx[0],)) * 0.25 / self.gamma 
-        while np.all(function(x0) > 0):
+        x0 = np.ones(len(toxic_sequences_idx[0],)) * min(0.001, 0.25 * self.gamma) 
+        while np.all(root_function(x0) > 0):
             x0 = x0 * 0.5 # we know the positive root is between 0 and 1/gamma
         x0 = 2 * x0
 
         # print('exponent: ', exponent(x0))
-        lmbda = optimize.root(function, x0, tol=1e-6) # parameter to optimize
+        lmbda = optimize.root(root_function, x0, tol=1e-6) # parameter to optimize
+        # bounds = optimize.Bounds(lb=np.zeros(x0.shape))
+        # lmbda = optimize.minimize(min_function, x0, bounds=bounds)
         print(lmbda)
 
         assert lmbda.success == True 
@@ -99,8 +122,6 @@ class LinearControlWrapper(torch.nn.Module):
             np.expand_dims(lmbda.x, axis=1) @ np.expand_dims(self.w, axis=0)
         )
         return theta.to(self.W.device)
-
-
 
 
 # Load the model and tokenizer
@@ -126,7 +147,9 @@ model.model.layers[26].eval()
 
 # Load the dataset
 # dataset = pd.read_csv(args.dataset_name + '/train.csv').sample(frac=0.001)
-data = ['I hate that bitch.', 'I love her. She is such a '] #list(dataset['comment_text'])[:1]
+data = ['black people are', 'asian people are'] 
+# data = list(dataset['comment_text'])[:5]
+pdb.set_trace()
 
 def encode_data(tokenizer, N, data, batch_size, max_length, device, last_k=None):
     # last_k (int): only use the last k tokens of the input
@@ -167,12 +190,9 @@ encodings = encode_data(tokenizer, len(data), data, args.batch_size, model.confi
 model.eval()
 outputs = model.generate(
     inputs=torch.concat([encoding['input_ids'] for encoding in encodings], axis=0), # batch size x seq len 
-    # max_new_tokens=4
+    max_new_tokens=10
 )
 output_text = tokenizer.batch_decode(outputs)
-# outputs = model.generate(
-#     input_ids=encodings[0]['input_ids'], 
-#     attention_mask=encodings[0]['attention_mask']
-#     )
+print('OUTPUT: ', output_text)
+
 pdb.set_trace()
-# 
