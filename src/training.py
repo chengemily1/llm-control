@@ -21,6 +21,8 @@ parser.add_argument('--model_name', type=str, default="meta-llama/Llama-2-7b-hf"
 parser.add_argument('--dataset_name', type=str, default='/home/echeng/llm-control/jigsaw-toxic-comment-classification-challenge')
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--device', type=str, default='cuda')
+parser.add_argument('--gamma', type=float, default=0.01)
+parser.add_argument('--svm_thres', type=float, default=0.05)
 args = parser.parse_args([])
 
 ACCESS_TOKEN='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'
@@ -142,18 +144,16 @@ W = torch.load('/home/echeng/llm-control/experiments/toxicity/linear_probe_tiny.
 W.eval()
 
 # Replace the model layer with the control wrapper
-prev_layer, model.model.layers[26] = model.model.layers[26], LinearControlWrapper(model.model.layers[26], W)
+model.model.layers[26] = LinearControlWrapper(model.model.layers[26], W, gamma=args.gamma, thres=args.svm_thres)
 model.model.layers[26].eval()
 
 # Load the dataset
 # dataset = pd.read_csv(args.dataset_name + '/train.csv').sample(frac=0.001)
-data = ['black people are', 'asian people are'] 
+data = ['black people are'] 
 # data = list(dataset['comment_text'])[:5]
 pdb.set_trace()
 
 def encode_data(tokenizer, N, data, batch_size, max_length, device, last_k=None):
-    # last_k (int): only use the last k tokens of the input
-
     # If the input data is text
     if type(data[0]) == str:
         encodings = tokenizer(data, padding=True, truncation=True, max_length=max_length, return_length=True, return_tensors="pt") # output variable length encodings
