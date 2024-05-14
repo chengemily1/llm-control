@@ -1,40 +1,66 @@
 import argparse
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, GPTNeoXTokenizerFast, AutoTokenizer
 from datasets import load_dataset
 import seaborn as sns
 import json
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
+import os
 
 parser = argparse.ArgumentParser(description='ID computation')
 
 # Data selection
 parser.add_argument('--model_name', type=str, default="meta-llama/Llama-2-7b-hf")
-parser.add_argument('--dataset_name', type=str, default='/home/echeng/llm-control/jigsaw-toxic-comment-classification-challenge')
+parser.add_argument('--dataset_name', type=str, default='/home/echeng/llm-control/stanford-nlp-imdb-sentiment')
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--device', type=str, default='cuda')
-args = parser.parse_args([])
+parser.add_argument('--experiment', default='sentiment')
+args = parser.parse_args()
+print(args)
 
 ACCESS_TOKEN='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'
 
 # Load the model and tokenizer
-tokenizer = AutoTokenizer.from_pretrained(args.model_name, token=ACCESS_TOKEN)
+tokenizer = AutoTokenizer.from_pretrained(args.model_name, 
+                                          token=ACCESS_TOKEN,
+                                          trust_remote_code=True,
+                                          )
 model = AutoModelForCausalLM.from_pretrained(args.model_name,
                                              token=ACCESS_TOKEN,
-                                             load_in_8bit=True
+                                             load_in_8bit=True,
+                                             trust_remote_code=True
                                             )
 
-if 'Llama-2' in args.model_name:
+if 'Llama' in args.model_name:
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
+elif 'pythia' in args.model_name or 'mistral' in args.model_name:
+    tokenizer.pad_token = tokenizer.eos_token
+elif 'OLMo' in args.model_name:
+    model.config.max_position_embeddings = model.config.max_sequence_length
 
 model.eval()
 
+
 # Load and shuffle the dataset
-dataset = pd.read_csv(args.dataset_name + '/train.csv').sample(frac=1)
-dataset.to_csv(args.dataset_name + '/train_shuffled.csv')
+def balance_labels(label_name, df):
+    labels = df[label_name]
+    minority = 1 if sum(labels) < 0.5 * len(labels) else 0
+    
+    # get all the minority labels
+    minority_df = df[df[label_name] == minority]
+    majority_df = df[df[label_name] == (1 if not minority else 0)].sample(len(minority_df))
+    
+    return pd.concat([minority_df, majority_df])
+
+if not os.path.exists(args.dataset_name + '/train_shuffled_balanced.csv'):
+    dataset = pd.read_csv(args.dataset_name + '/train_shuffled.csv')
+    balanced_df = balance_labels('toxic', dataset).sample(frac=1)
+    balanced_df.to_csv(args.dataset_name + '/train_shuffled_balanced.csv')
+else:
+    balanced_df = pd.read_csv(args.dataset_name + '/train_shuffled_balanced.csv')
 
 def encode_data(tokenizer, N, data, batch_size, max_length, device, last_k=None):
     # last_k (int): only use the last k tokens of the input
@@ -55,9 +81,6 @@ def encode_data(tokenizer, N, data, batch_size, max_length, device, last_k=None)
                 'attention_mask': encodings['attention_mask'][i: i + batch_size][-last_k:].to(device) }
                 for i in range(0, N, batch_size)
             ]
-
-
-
     else: # input data is tokens-- manually pad and batch.
         max_len = max([len(sentence) for sentence in data])
         data = [sentence for sentence in data if len(sentence) > 2]
@@ -72,7 +95,8 @@ def encode_data(tokenizer, N, data, batch_size, max_length, device, last_k=None)
 
     return encodings
 
-data = list(dataset['comment_text'])
+dataset = pd.read_csv(args.dataset_name + '/train_shuffled_balanced.csv')
+data = list(dataset['text'])
 
 # tokenize data
 encodings = encode_data(tokenizer, len(data), data, args.batch_size, model.config.max_position_embeddings, args.device)
@@ -94,4 +118,4 @@ with torch.no_grad():
     representations = [torch.cat(batches, dim=0) for batches in representations]
     print('Layer 1 reps shape: ')
     print(representations[1].shape)
-    torch.save(representations, '/home/echeng/llm-control/toxic_reps.pt')
+    torch.save(representations, f'/home/echeng/llm-control/experiments/{args.experiment}/saved_reps/{args.model_name.split("/")[-1]}_reps.pt')
