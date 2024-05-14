@@ -12,7 +12,6 @@ import pdb
 import random
 from sklearn.metrics import f1_score 
 from scipy import optimize  
-from control_wrapper import LinearControlWrapper
 
 
 parser = argparse.ArgumentParser(description='training proof-of-concept')
@@ -33,6 +32,132 @@ parser.add_argument('--svm_thres', type=float, default=0.05)
 args = parser.parse_args()
 
 ACCESS_TOKEN='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'
+
+
+# Linear control wrapper class
+class LinearControlWrapper(torch.nn.Module):
+    def __init__(self, base_layer: nn.Module, 
+                 linear_probe: nn.Module, name="", gamma=None, thres=0.05, norm=None,
+                 norm_factor=None):
+        """
+        W shape: d x 2
+        """
+        super(LinearControlWrapper, self).__init__()
+        self.base_layer = base_layer
+        self.thres = - thres # the SVM threshold we're comfortable with
+
+        # Probe-related parameters
+        self.gamma = gamma
+        self.norm = norm
+        self.norm_factor = norm_factor
+        self.probe = linear_probe.eval().half()
+        self.W = linear_probe.weight # linear probe
+        self.w1 = self.W[0,:].detach().cpu().numpy()
+        self.w2 = self.W[1,:].detach().cpu().numpy()
+        self.b = linear_probe.bias
+        self.w = self.w1 - self.w2 # as defined in algo w_1 - w_2
+        self.w_norm = np.linalg.norm(self.w) # python float
+        self.w2T_w = self.w2 @ self.w
+
+        # Logging
+        self.toxic_sequences = []
+        self.pre_adjust_toxicity_log = []
+        self.post_adjust_toxicity_log = []
+
+        # Control off or on
+        self.control = False
+
+    def control_off(self):
+        self.control = False
+
+    def control_on(self):
+        self.control = True
+
+    def eval_probe(self, x_seq, last_token_idx):
+        eval_result = self.probe(x_seq[torch.arange(x_seq.size(0)),last_token_idx])
+        return nn.functional.softmax(eval_result, dim=-1)[:,1].detach().cpu().numpy() # this is the probscore
+
+    def forward(self, x, *args, **kwargs):
+        x_seq, x_metadata = self.base_layer(x, *args, **kwargs)
+
+        # Add the toxicity score to the log
+        last_token_idx = kwargs['position_ids'].cpu().size(1) - 1
+        self.pre_adjust_toxicity_log.append(self.eval_probe(x_seq, last_token_idx))
+        
+        if self.control: # Make the adjustment
+            print('NORM OF LAST TOKEN: ', torch.norm(x_seq[torch.arange(x_seq.size(0)),last_token_idx], p=2))
+            x_seq[torch.arange(x_seq.size(0)),last_token_idx] += self.optimal_theta(
+                x_seq[torch.arange(x_seq.size(0)),last_token_idx] # get last token rep
+            )
+
+        # Add to toxicity log
+        self.post_adjust_toxicity_log.append(self.eval_probe(x_seq, last_token_idx)) # this is the probscore
+
+        return x_seq, x_metadata
+
+    def optimal_theta(self, x):
+        """Finds the optimal steering vector.
+
+        Args:
+            x (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        theta = torch.zeros(x.shape) # batch size x d
+        x = x.detach().cpu().numpy()
+
+        # Classified as toxic when (w_1 - w_2).T x < 0
+        toxic_sequences_idx = np.where(x @ self.w < self.thres)
+        self.toxic_sequences.append(toxic_sequences_idx)
+
+        if not len(toxic_sequences_idx[0]): 
+            print('no intervention needed')
+            return theta.to(self.W.device)
+
+        print('intervention needed')
+        print(f"Sequence is toxic at token {len(self.pre_adjust_toxicity_log)}")
+
+        x_toxic = x[toxic_sequences_idx] # index into the toxic ones only
+        
+        if self.gamma is not None:
+            lmbda = self.convex_optimization_procedure(len(toxic_sequences_idx[0]), x_toxic)
+
+            assert lmbda.success == True 
+            print('VECTOR NORM: ', np.linalg.norm(lmbda.x * self.w))
+            pdb.set_trace()
+            theta[toxic_sequences_idx] = torch.Tensor(
+                np.expand_dims(lmbda.x, axis=1) @ np.expand_dims(self.w, axis=0)
+            )
+        elif self.norm_factor is not None:
+            theta[toxic_sequences_idx] = np.linalg.norm(x) * self.norm_factor / self.w_norm * torch.Tensor(self.w).unsqueeze(0)
+        elif self.norm is not None:
+            pdb.set_trace()
+            theta[toxic_sequences_idx] = self.norm / self.w_norm * torch.Tensor(self.w).unsqueeze(0)
+        return theta.to(self.W.device)
+    
+    def convex_optimization_procedure(self, size, x_toxic):
+        root_function = lambda l: l * np.exp(l * self.w_norm**2 + x_toxic @ self.w) + l - 1/self.gamma
+        
+        # Binary search for initial condition
+        x0 = np.ones(size,) * min(0.01, 0.25 * 1/self.gamma) 
+        while np.all(root_function(x0) > 0):
+            x0 = x0 * 0.5 # we know the positive root is between 0 and 1/gamma
+        x0 = 2 * x0
+
+        lmbda = optimize.root(root_function, x0, tol=1e-6) # parameter to optimize
+        print(lmbda)
+
+        assert lmbda.success == True 
+        print('VECTOR NORM: ', np.linalg.norm(lmbda.x * self.w))
+        pdb.set_trace()
+        return lmbda
+
+    def reset_logs(self):
+        self.toxic_sequences = []
+        self.pre_adjust_toxicity_log = []
+        self.post_adjust_toxicity_log = []
+
 
 # Load the model and tokenizer
 tokenizer = AutoTokenizer.from_pretrained(args.model_name, token=ACCESS_TOKEN)
@@ -108,7 +233,9 @@ def retrofit_model(model, Ws):
         model.model.layers[layer] = LinearControlWrapper(
             model.model.layers[layer], 
             linear_probe=Ws[layer], 
-            p=0.4
+            gamma=args.gamma, 
+            norm=args.norm, 
+            norm_factor=args.norm_factor
         )
 
 retrofit_model()
@@ -118,7 +245,10 @@ for i, encoding in enumerate(encodings):
     for layer in args.layers:
         model.model.layers[layer] = LinearControlWrapper(
             model.model.layers[layer].base_layer, 
-            linear_probe=Ws[layer], p=0.4
+            linear_probe=Ws[layer], 
+            gamma=args.gamma, 
+            norm=args.norm, 
+            norm_factor=args.norm_factor
         )
         results_dict[layer] = {}
         results_dict[layer][data[i]] = {
