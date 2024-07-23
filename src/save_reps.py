@@ -12,8 +12,8 @@ import os
 parser = argparse.ArgumentParser(description='ID computation')
 
 # Data selection
-parser.add_argument('--model_name', type=str, default="meta-llama/Llama-2-7b-hf")
-parser.add_argument('--dataset_name', type=str, default='/home/echeng/llm-control/stanford-nlp-imdb-sentiment')
+parser.add_argument('--model_name', type=str, default="meta-llama/Llama-3-8B")
+parser.add_argument('--dataset_name', type=str, default='/home/echeng/llm-control/sentiment-constraint-set')
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--device', type=str, default='cuda')
 parser.add_argument('--experiment', default='sentiment')
@@ -96,7 +96,7 @@ def encode_data(tokenizer, N, data, batch_size, max_length, device, last_k=None)
     return encodings
 
 dataset = pd.read_csv(args.dataset_name + '/train_shuffled_balanced.csv')
-data = list(dataset['text'])
+data = list(dataset[('toxic' if args.experiment == 'toxicity' else 'negative')])
 
 # tokenize data
 encodings = encode_data(tokenizer, len(data), data, args.batch_size, model.config.max_position_embeddings, args.device)

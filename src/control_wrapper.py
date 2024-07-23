@@ -12,7 +12,7 @@ import pdb
 import random
 from sklearn.metrics import f1_score 
 from scipy import optimize  
-
+import time
 
 # Linear control wrapper class
 class LinearControlWrapper(torch.nn.Module):
@@ -39,6 +39,7 @@ class LinearControlWrapper(torch.nn.Module):
         self.toxic_sequences = []
         self.pre_adjust_toxicity_log = []
         self.post_adjust_toxicity_log = []
+        self.latency = []
 
         # Control off or on
         self.control = False
@@ -54,10 +55,16 @@ class LinearControlWrapper(torch.nn.Module):
         return nn.functional.softmax(eval_result, dim=-1)[:,1].detach().cpu().numpy() # this is the probscore
 
     def forward(self, x, *args, **kwargs):
+        t = time.time()
         x_seq, x_metadata = self.base_layer(x, *args, **kwargs)
 
         # Add the toxicity score to the log
-        last_token_idx = kwargs['position_ids'].cpu().size(1) - 1
+        # print(kwargs)
+        # pdb.set_trace()
+        if 'position_ids' in kwargs:
+            last_token_idx = kwargs['position_ids'].cpu().size(1) - 1
+        else:
+            last_token_idx = x_seq.size(1) - 1
         self.pre_adjust_toxicity_log.append(self.eval_probe(x_seq, last_token_idx))
         
         if self.control: # Make the adjustment
@@ -67,7 +74,7 @@ class LinearControlWrapper(torch.nn.Module):
 
         # Add to toxicity log
         self.post_adjust_toxicity_log.append(self.eval_probe(x_seq, last_token_idx)) # this is the probscore
-
+        self.latency.append(time.time() - t)
         return x_seq, x_metadata
 
     def optimal_theta(self, x):
@@ -88,33 +95,34 @@ class LinearControlWrapper(torch.nn.Module):
         self.toxic_sequences.append(toxic_sequences_idx)
 
         if not len(toxic_sequences_idx[0]): 
-            print('no intervention needed')
+            # print('no intervention needed')
             return theta.to(self.W.device)
 
-        print('intervention needed')
+        # print('intervention needed')
         print(f"Sequence is toxic at token {len(self.pre_adjust_toxicity_log)}")
 
         x_toxic = x[toxic_sequences_idx] # index into the toxic ones only
-        pdb.set_trace()
-        theta[toxic_sequences_idx] = - self.w * (x_toxic @ self.w - np.log(1/self.p - 1)) / self.w_norm**2
+        # pdb.set_trace()
+        theta[toxic_sequences_idx] = torch.FloatTensor(- self.w * (x_toxic @ self.w - np.log(1/self.p - 1)) / self.w_norm**2)
 
         return theta.to(self.W.device)        
-        # Binary search for initial condition
-        x0 = np.ones(size,) * min(0.01, 0.25 * 1/self.gamma) 
-        while np.all(root_function(x0) > 0):
-            x0 = x0 * 0.5 # we know the positive root is between 0 and 1/gamma
-        x0 = 2 * x0
+        # # Binary search for initial condition
+        # x0 = np.ones(size,) * min(0.01, 0.25 * 1/self.gamma) 
+        # while np.all(root_function(x0) > 0):
+        #     x0 = x0 * 0.5 # we know the positive root is between 0 and 1/gamma
+        # x0 = 2 * x0
 
-        lmbda = optimize.root(root_function, x0, tol=1e-6) # parameter to optimize
-        print(lmbda)
+        # lmbda = optimize.root(root_function, x0, tol=1e-6) # parameter to optimize
+        # print(lmbda)
 
-        assert lmbda.success == True 
-        print('VECTOR NORM: ', np.linalg.norm(lmbda.x * self.w))
-        pdb.set_trace()
-        return lmbda
+        # assert lmbda.success == True 
+        # print('VECTOR NORM: ', np.linalg.norm(lmbda.x * self.w))
+        # pdb.set_trace()
+        # return lmbda
 
     def reset_logs(self):
         self.toxic_sequences = []
         self.pre_adjust_toxicity_log = []
         self.post_adjust_toxicity_log = []
+        self.latency = []
 
