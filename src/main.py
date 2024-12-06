@@ -40,7 +40,7 @@ args = parser.parse_args()
 exp = 'sentiment' if args.experiment in ('formality', 'sentiment') else 'toxicity' # reuse the sentiment prompts for formlaity
 args.dataset_name = f'/home/echeng/llm-control/experiments/test_{exp}.csv' # last minute switch
 
-ACCESS_TOKEN='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'
+ACCESS_TOKEN='YOUR TOKEN'
 
 # Load the model and tokenizer
 tokenizer = AutoTokenizer.from_pretrained(args.model_name, token=ACCESS_TOKEN)
