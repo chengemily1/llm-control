@@ -20,7 +20,7 @@ parser.add_argument('--experiment', default='sentiment')
 args = parser.parse_args()
 print(args)
 
-ACCESS_TOKEN='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'
+ACCESS_TOKEN='YOUR TOKEN'
 
 # Load the model and tokenizer
 tokenizer = AutoTokenizer.from_pretrained(args.model_name, 
