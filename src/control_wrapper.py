@@ -17,13 +17,13 @@ import time
 # Linear control wrapper class
 class LinearControlWrapper(torch.nn.Module):
     def __init__(self, base_layer: nn.Module, 
-                 linear_probe: nn.Module, name="", p=0.4):
+                 linear_probe: nn.Module, name="", p=0.4, continuous_tune=False):
         """
         W shape: d x 2
         """
         super(LinearControlWrapper, self).__init__()
         self.base_layer = base_layer
-        assert (0 < p) and (p < 1)
+        # assert (0 < p) and (p < 1)
         self.p = p # the SVM threshold we're comfortable with
 
         # Probe-related parameters
@@ -43,6 +43,7 @@ class LinearControlWrapper(torch.nn.Module):
 
         # Control off or on
         self.control = False
+        self.continuous_tune = continuous_tune
 
     def control_off(self):
         self.control = False
@@ -59,8 +60,6 @@ class LinearControlWrapper(torch.nn.Module):
         x_seq, x_metadata = self.base_layer(x, *args, **kwargs)
 
         # Add the toxicity score to the log
-        # print(kwargs)
-        # pdb.set_trace()
         if 'position_ids' in kwargs:
             last_token_idx = kwargs['position_ids'].cpu().size(1) - 1
         else:
@@ -90,7 +89,11 @@ class LinearControlWrapper(torch.nn.Module):
         x = x.detach().cpu().numpy()
 
         # Classified as toxic when (w_1 - w_2).T x < log (1/p - 1)
-        toxic_sequences_idx = np.where(x @ self.w < np.log(1 / self.p - 1))
+        if not self.continuous_tune:
+            toxic_sequences_idx = np.where(x @ self.w < np.log(1 / self.p - 1))
+        else:
+            # tune everything.
+            toxic_sequences_idx = np.where(x @ self.w != np.log(1 / self.p - 1))
 
         self.toxic_sequences.append(toxic_sequences_idx)
 
@@ -106,19 +109,6 @@ class LinearControlWrapper(torch.nn.Module):
         theta[toxic_sequences_idx] = torch.FloatTensor(- self.w * (x_toxic @ self.w - np.log(1/self.p - 1)) / self.w_norm**2)
 
         return theta.to(self.W.device)        
-        # # Binary search for initial condition
-        # x0 = np.ones(size,) * min(0.01, 0.25 * 1/self.gamma) 
-        # while np.all(root_function(x0) > 0):
-        #     x0 = x0 * 0.5 # we know the positive root is between 0 and 1/gamma
-        # x0 = 2 * x0
-
-        # lmbda = optimize.root(root_function, x0, tol=1e-6) # parameter to optimize
-        # print(lmbda)
-
-        # assert lmbda.success == True 
-        # print('VECTOR NORM: ', np.linalg.norm(lmbda.x * self.w))
-        # pdb.set_trace()
-        # return lmbda
 
     def reset_logs(self):
         self.toxic_sequences = []

@@ -41,7 +41,12 @@ elif 'pythia' in args.model_name or 'mistral' in args.model_name:
 
 model.eval()
 
-source, target = ('optimism', 'despair') if args.experiment == 'sentiment' else ('toxicity', 'kindness')
+if args.experiment == 'sentiment':
+    source, target = ('optimism', 'despair')
+elif args.experiment == 'toxicity':
+    source, target = ('toxicity', 'kindness')
+else:
+    source, target = ('formal', 'casual')
 
 # Extract reps at every layer
 def last_token_rep(x, attention_mask, padding='right'):

@@ -8,15 +8,18 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 import os
+from baukit import Trace, TraceDict
+import pdb
 
 parser = argparse.ArgumentParser(description='ID computation')
 
 # Data selection
-parser.add_argument('--model_name', type=str, default="meta-llama/Llama-3-8B")
-parser.add_argument('--dataset_name', type=str, default='/home/echeng/llm-control/sentiment-constraint-set')
+parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3-8B")
+parser.add_argument('--dataset_name', type=str, default='/home/echeng/llm-control/formality-constraint-set')
+parser.add_argument('--attn', type=int, default=0)
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--device', type=str, default='cuda')
-parser.add_argument('--experiment', default='sentiment')
+parser.add_argument('--experiment', default='formality')
 args = parser.parse_args()
 print(args)
 
@@ -95,27 +98,60 @@ def encode_data(tokenizer, N, data, batch_size, max_length, device, last_k=None)
 
     return encodings
 
-dataset = pd.read_csv(args.dataset_name + '/train_shuffled_balanced.csv')
-data = list(dataset[('toxic' if args.experiment == 'toxicity' else 'negative')])
+dataset = pd.read_csv(args.dataset_name + '/train_shuffled_balanced.csv')#.iloc[:3000]
+# data = list(dataset['text'])
+text_col = {
+    'toxicity': 'comment_text', 'sentiment': 'text', 'formality': 'sentence'
+}
+
+data = list(dataset[text_col[args.experiment]])
 
 # tokenize data
-encodings = encode_data(tokenizer, len(data), data, args.batch_size, model.config.max_position_embeddings, args.device)
+if not args.attn:
+    encodings = encode_data(tokenizer, len(data), data, args.batch_size, model.config.max_position_embeddings, args.device)
 
-def last_token_rep(x, attention_mask, padding='right'):
-    seq_len = attention_mask.sum(dim=1)
-    indices = (seq_len - 1)
-    last_token_rep = x[torch.arange(x.size(0)), indices] if padding=='right' else x[torch.arange(x.size(0)), -1]
-    return last_token_rep.cpu()
+    def last_token_rep(x, attention_mask, padding='right'):
+        seq_len = attention_mask.sum(dim=1)
+        indices = (seq_len - 1)
+        last_token_rep = x[torch.arange(x.size(0)), indices] if padding=='right' else x[torch.arange(x.size(0)), -1]
+        return last_token_rep.cpu()
 
-# PROCESS AND SAVE REPS
-with torch.no_grad():
-    representations = []
-    for batch in tqdm(encodings):
-        output = model(batch['input_ids'], attention_mask=batch['attention_mask'], output_hidden_states=True)['hidden_states']
-        pooled_output = tuple([last_token_rep(layer, batch['attention_mask'], padding=tokenizer.padding_side) for layer in output])
-        representations.append(pooled_output)
-    representations = [list(batch) for batch in zip(*representations)]
-    representations = [torch.cat(batches, dim=0) for batches in representations]
-    print('Layer 1 reps shape: ')
-    print(representations[1].shape)
-    torch.save(representations, f'/home/echeng/llm-control/experiments/{args.experiment}/saved_reps/{args.model_name.split("/")[-1]}_reps.pt')
+    # PROCESS AND SAVE REPS
+    with torch.no_grad():
+        representations = []
+        for batch in tqdm(encodings):
+            output = model(batch['input_ids'], attention_mask=batch['attention_mask'], output_hidden_states=True)['hidden_states']
+            pooled_output = tuple([last_token_rep(layer, batch['attention_mask'], padding=tokenizer.padding_side) for layer in output])
+            representations.append(pooled_output)
+        representations = [list(batch) for batch in zip(*representations)]
+        representations = [torch.cat(batches, dim=0) for batches in representations]
+        print('Layer 1 reps shape: ')
+        print(representations[1].shape)
+        torch.save(representations, f'/home/echeng/llm-control/experiments/{args.experiment}/saved_reps/{args.model_name.split("/")[-1]}_reps.pt')
+else:
+    encodings = []
+    for datum in data:
+        encodings.append(encode_data(tokenizer, 1, [datum], 1, model.config.max_position_embeddings, args.device)[0])
+
+    if 'Llama' in args.model_name or 'mistral' in args.model_name:
+        HEADS = [f"model.layers.{i}.self_attn.o_proj" for i in range(model.config.num_hidden_layers)]
+    elif 'pythia' in args.model_name:
+        HEADS = [f"gpt_neox.layers.{i}.attention.dense" for i in range(model.config.num_hidden_layers)]
+
+    head_embeds = []
+    with torch.no_grad():
+        for i, prompt in tqdm(enumerate(encodings)):
+            prompt = prompt['input_ids']        
+            with TraceDict(model, HEADS) as ret:
+                output = model(prompt)
+            head_wise_hidden_states = [ret[head].output.squeeze().detach().cpu() for head in HEADS]
+
+            head_wise_hidden_states = torch.stack(head_wise_hidden_states, dim = 0).squeeze().numpy()
+            if len(tuple(head_wise_hidden_states.shape)) == 3:
+                head_wise_hidden_states = head_wise_hidden_states[:, -1, :]
+            attn_dim = head_wise_hidden_states.shape[-1] // model.config.num_attention_heads
+            head_wise_hidden_states = head_wise_hidden_states.reshape((head_wise_hidden_states.shape[0], model.config.num_attention_heads, attn_dim))
+            head_embeds.append(head_wise_hidden_states)
+
+    head_embeds = np.array(head_embeds)
+    np.save(f'/home/echeng/llm-control/experiments/{args.experiment}/saved_attn_reps/{args.model_name.split("/")[-1]}_reps.npy', head_embeds)
