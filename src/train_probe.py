@@ -32,7 +32,7 @@ parser.add_argument('--save', type=int, choices=[0,1], default=0, help='whether 
 args = parser.parse_args()
 print(args)
 
-ACCESS_TOKEN='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'
+ACCESS_TOKEN='YOUR TOKEN'
 random.seed(args.random_seed)
 
 DATASET_PATH = {
