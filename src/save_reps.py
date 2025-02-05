@@ -2,28 +2,26 @@ import argparse
 import torch
 from transformers import AutoModelForCausalLM, GPTNeoXTokenizerFast, AutoTokenizer
 from datasets import load_dataset
-import seaborn as sns
 import json
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
 import os
-from baukit import Trace, TraceDict
 import pdb
 
 parser = argparse.ArgumentParser(description='ID computation')
 
 # Data selection
 parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3-8B")
-parser.add_argument('--dataset_name', type=str, default='/home/echeng/llm-control/formality-constraint-set')
+parser.add_argument('--dataset_name', type=str, default='/home/camoalon/Projects/llm-control/sentiment-constraint-set')
 parser.add_argument('--attn', type=int, default=0)
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--device', type=str, default='cuda')
-parser.add_argument('--experiment', default='formality')
+parser.add_argument('--experiment', default='sentiment')
 args = parser.parse_args()
 print(args)
 
-ACCESS_TOKEN='YOUR TOKEN'
+ACCESS_TOKEN='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'
 
 # Load the model and tokenizer
 tokenizer = AutoTokenizer.from_pretrained(args.model_name, 
@@ -127,7 +125,7 @@ if not args.attn:
         representations = [torch.cat(batches, dim=0) for batches in representations]
         print('Layer 1 reps shape: ')
         print(representations[1].shape)
-        torch.save(representations, f'/home/echeng/llm-control/experiments/{args.experiment}/saved_reps/{args.model_name.split("/")[-1]}_reps.pt')
+        torch.save(representations, f'/home/camoalon/Projects/llm-control/experiments/{args.experiment}/saved_reps/{args.model_name.split("/")[-1]}_reps.pt')
 else:
     encodings = []
     for datum in data:
@@ -154,4 +152,4 @@ else:
             head_embeds.append(head_wise_hidden_states)
 
     head_embeds = np.array(head_embeds)
-    np.save(f'/home/echeng/llm-control/experiments/{args.experiment}/saved_attn_reps/{args.model_name.split("/")[-1]}_reps.npy', head_embeds)
+    np.save(f'/home/camoalon/Projects/llm-control/experiments/{args.experiment}/saved_attn_reps/{args.model_name.split("/")[-1]}_reps.npy', head_embeds)

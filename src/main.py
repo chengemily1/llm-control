@@ -14,7 +14,7 @@ from sklearn.metrics import f1_score
 
 from control_wrapper import LinearControlWrapper
 from actadd_wrapper import ActAddWrapper
-from fudge_wrapper import FudgeWrapper
+#from fudge_wrapper import FudgeWrapper
 from instructions import *
 from data_util import encode_data
 
@@ -38,9 +38,9 @@ parser.add_argument('--s', default=None, type=float)
 args = parser.parse_args()
 
 exp = 'sentiment' if args.experiment in ('formality', 'sentiment') else 'toxicity' # reuse the sentiment prompts for formlaity
-args.dataset_name = f'/home/echeng/llm-control/experiments/test_{exp}.csv' # last minute switch
+args.dataset_name = f'/home/camoalon/Projects/llm-control/experiments/test_{exp}.csv' # last minute switch
 
-ACCESS_TOKEN='YOUR TOKEN'
+ACCESS_TOKEN='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'
 
 # Load the model and tokenizer
 tokenizer = AutoTokenizer.from_pretrained(args.model_name, token=ACCESS_TOKEN)
@@ -64,7 +64,7 @@ model.eval()
 num_layers = model.config.num_hidden_layers
 Ws = [
     torch.load(
-        f'/home/echeng/llm-control/experiments/{args.experiment}/saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}{"_rs43" if args.experiment in ("formality", "sentiment") else ""}.pt'
+        f'/home/camoalon/Projects/llm-control/experiments/{args.experiment}/saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}{"_rs43" if args.experiment in ("formality", "sentiment") else ""}.pt'
         ).to(args.device)
     for layer in range(1, num_layers+1)
 ]
