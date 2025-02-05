@@ -1,0 +1,14 @@
+# Ignore local config files
+config.py
+config.json
+
+# Ignore environment files
+.env
+
+# Ignore IDE-specific files
+.idea/
+.vscode/
+
+# Ignore Python compiled files
+__pycache__/
+*.pyc
