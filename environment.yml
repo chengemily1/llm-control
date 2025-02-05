@@ -1,4 +1,4 @@
-name: control
+name: liseco
 channels:
   - pytorch
   - nvidia
