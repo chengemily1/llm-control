@@ -14,11 +14,12 @@ parser = argparse.ArgumentParser(description='ID computation')
 
 # Data selection
 parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3-8B")
-parser.add_argument('--dataset_name', type=str, default='/home/camoalon/Projects/llm-control/sentiment-constraint-set')
+parser.add_argument('--dataset_name', type=str, default=f'{YOUR_PATH}/OpenThoughts-114k-math')
 parser.add_argument('--attn', type=int, default=0)
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--device', type=str, default='cuda')
-parser.add_argument('--experiment', default='sentiment')
+parser.add_argument('--experiment', default='sentiment', 
+                   choices=['sentiment', 'toxicity', 'formality', 'reasoning'])
 args = parser.parse_args()
 print(args)
 
@@ -45,11 +46,12 @@ elif 'OLMo' in args.model_name:
 
 model.eval()
 
+# Shuffle the dataset
+text_col = {'toxicity': 'comment_text', 'sentiment': 'text', 'formality': 'sentence', 'reasoning': 'problem_solution'}
 
-# Load and shuffle the dataset
 def balance_labels(label_name, df):
     labels = df[label_name]
-    minority = 1 if sum(labels) < 0.5 * len(labels) else 0
+    minority = 1 if labels.sum() < 0.5 * len(labels) else 0
     
     # get all the minority labels
     minority_df = df[df[label_name] == minority]
@@ -58,11 +60,33 @@ def balance_labels(label_name, df):
     return pd.concat([minority_df, majority_df])
 
 if not os.path.exists(args.dataset_name + '/train_shuffled_balanced.csv'):
-    dataset = pd.read_csv(args.dataset_name + '/train_shuffled.csv')
-    balanced_df = balance_labels('toxic', dataset).sample(frac=1)
+    # For handling HuggingFace dataset
+    if args.experiment == 'reasoning':
+        # Load dataset based on experiment type
+        dataset = load_dataset("open-r1/OpenThoughts-114k-math", cache_dir="/mnt/huggingface_cache")
+        print("Dataset loaded successfully!")
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(dataset['train'])
+        
+        # Drop rows with NaN in either 'problem' or 'solution'
+        df = df.dropna(subset=['problem', 'solution'])
+        
+        # Create the concatenated column
+        df['problem_solution'] = df['problem'] + ' ' + df['solution']
+        
+        # Balance the dataset and shuffle it
+        balanced_df = balance_labels('correct', df).sample(frac=1)
+        balanced_df.to_csv(args.dataset_name + '/train_shuffled_balanced.csv', index=False)
+    else:
+    # For other experiments using local files
+        dataset = pd.read_csv(args.dataset_name + '/train_shuffled.csv')
+        balanced_df = balance_labels('toxic', dataset).sample(frac=1)
+        balanced_df.to_csv(args.dataset_name + '/train_shuffled_balanced.csv')
+
+    # Drop rows where the target text column is NaN        
+    balanced_df = balanced_df.dropna(subset=[text_col[args.experiment]])
     balanced_df.to_csv(args.dataset_name + '/train_shuffled_balanced.csv')
-else:
-    balanced_df = pd.read_csv(args.dataset_name + '/train_shuffled_balanced.csv')
 
 def encode_data(tokenizer, N, data, batch_size, max_length, device, last_k=None):
     # last_k (int): only use the last k tokens of the input
@@ -97,11 +121,7 @@ def encode_data(tokenizer, N, data, batch_size, max_length, device, last_k=None)
 
     return encodings
 
-dataset = pd.read_csv(args.dataset_name + '/train_shuffled_balanced.csv')#.iloc[:3000]
-# data = list(dataset['text'])
-text_col = {
-    'toxicity': 'comment_text', 'sentiment': 'text', 'formality': 'sentence'
-}
+dataset = pd.read_csv(args.dataset_name + '/train_shuffled_balanced.csv', keep_default_na=False)
 
 data = list(dataset[text_col[args.experiment]])
 
@@ -126,7 +146,7 @@ if not args.attn:
         representations = [torch.cat(batches, dim=0) for batches in representations]
         print('Layer 1 reps shape: ')
         print(representations[1].shape)
-        torch.save(representations, f'YOUR_PATH/experiments/{args.experiment}/saved_reps/{args.model_name.split("/")[-1]}_reps.pt')
+        torch.save(representations, f'{YOUR_PATH}/experiments/{args.experiment}/saved_reps/{args.model_name.split("/")[-1]}_reps.pt')
 else:
     encodings = []
     for datum in data:
