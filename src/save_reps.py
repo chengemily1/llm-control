@@ -8,6 +8,7 @@ import numpy as np
 from tqdm import tqdm
 import os
 import pdb
+from config import YOUR_PATH, YOUR_TOKEN
 
 parser = argparse.ArgumentParser(description='ID computation')
 
@@ -21,7 +22,7 @@ parser.add_argument('--experiment', default='sentiment')
 args = parser.parse_args()
 print(args)
 
-ACCESS_TOKEN='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'
+ACCESS_TOKEN= YOUR_TOKEN
 
 # Load the model and tokenizer
 tokenizer = AutoTokenizer.from_pretrained(args.model_name, 
@@ -125,7 +126,7 @@ if not args.attn:
         representations = [torch.cat(batches, dim=0) for batches in representations]
         print('Layer 1 reps shape: ')
         print(representations[1].shape)
-        torch.save(representations, f'/home/camoalon/Projects/llm-control/experiments/{args.experiment}/saved_reps/{args.model_name.split("/")[-1]}_reps.pt')
+        torch.save(representations, f'YOUR_PATH/experiments/{args.experiment}/saved_reps/{args.model_name.split("/")[-1]}_reps.pt')
 else:
     encodings = []
     for datum in data:
@@ -152,4 +153,4 @@ else:
             head_embeds.append(head_wise_hidden_states)
 
     head_embeds = np.array(head_embeds)
-    np.save(f'/home/camoalon/Projects/llm-control/experiments/{args.experiment}/saved_attn_reps/{args.model_name.split("/")[-1]}_reps.npy', head_embeds)
+    np.save(f'{YOUR_PATH}/llm-control/experiments/{args.experiment}/saved_attn_reps/{args.model_name.split("/")[-1]}_reps.npy', head_embeds)
