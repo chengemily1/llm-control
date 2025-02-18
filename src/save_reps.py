@@ -59,16 +59,16 @@ def balance_labels(label_name, df):
     
     return pd.concat([minority_df, majority_df])
 
+os.makedirs(args.dataset_name, exist_ok=True)
 if not os.path.exists(args.dataset_name + '/train_shuffled_balanced.csv'):
     # For handling HuggingFace dataset
     if args.experiment == 'reasoning':
         # Load dataset based on experiment type
-        dataset = load_dataset("open-r1/OpenThoughts-114k-math", cache_dir="/mnt/huggingface_cache")
+        dataset = load_dataset("open-r1/OpenThoughts-114k-math")
         print("Dataset loaded successfully!")
         
         # Convert to DataFrame
         df = pd.DataFrame(dataset['train'])
-        
         # Drop rows with NaN in either 'problem' or 'solution'
         df = df.dropna(subset=['problem', 'solution'])
         
@@ -88,25 +88,19 @@ if not os.path.exists(args.dataset_name + '/train_shuffled_balanced.csv'):
     balanced_df = balanced_df.dropna(subset=[text_col[args.experiment]])
     balanced_df.to_csv(args.dataset_name + '/train_shuffled_balanced.csv')
 
-def encode_data(tokenizer, N, data, batch_size, max_length, device, last_k=None):
+def encode_data(tokenizer, N, data, batch_size, max_length, device):
     # last_k (int): only use the last k tokens of the input
 
     # If the input data is text
     if type(data[0]) == str:
-        encodings = tokenizer(data, padding=True, truncation=True, max_length=max_length, return_length=True, return_tensors="pt") # output variable length encodings
-        if not last_k:
-            encodings = [
-                {'input_ids': encodings['input_ids'][i: i + batch_size].to(device),
-                'attention_mask': encodings['attention_mask'][i: i + batch_size].to(device),
-                'length': encodings['length'][i: i + batch_size] }
-                for i in range(0, N, batch_size)
-            ]
-        else:
-            encodings = [
-                {'input_ids': encodings['input_ids'][i: i + batch_size][-last_k:].to(device),
-                'attention_mask': encodings['attention_mask'][i: i + batch_size][-last_k:].to(device) }
-                for i in range(0, N, batch_size)
-            ]
+        
+        encodings = []
+        for i in tqdm(range(0, N, batch_size)):
+            tokenizer_output = tokenizer(data[i: i + batch_size], padding=True, truncation=True, max_length=max_length, return_tensors="pt")
+            tokenizer_output['input_ids'] = tokenizer_output['input_ids'].to(device)
+            tokenizer_output['attention_mask'] = tokenizer_output['attention_mask'].to(device)
+            encodings.append(tokenizer_output)
+        
     else: # input data is tokens-- manually pad and batch.
         max_len = max([len(sentence) for sentence in data])
         data = [sentence for sentence in data if len(sentence) > 2]
@@ -122,13 +116,13 @@ def encode_data(tokenizer, N, data, batch_size, max_length, device, last_k=None)
     return encodings
 
 dataset = pd.read_csv(args.dataset_name + '/train_shuffled_balanced.csv', keep_default_na=False)
-
 data = list(dataset[text_col[args.experiment]])
 
 # tokenize data
 if not args.attn:
+    print("Encoding data")
     encodings = encode_data(tokenizer, len(data), data, args.batch_size, model.config.max_position_embeddings, args.device)
-
+    print("done")
     def last_token_rep(x, attention_mask, padding='right'):
         seq_len = attention_mask.sum(dim=1)
         indices = (seq_len - 1)
@@ -136,17 +130,29 @@ if not args.attn:
         return last_token_rep.cpu()
 
     # PROCESS AND SAVE REPS
+    print("processing and saving reps")
+    folder = f"{YOUR_PATH}/experiments/{args.experiment}/saved_reps/"
+    os.makedirs(folder, exist_ok=True)
     with torch.no_grad():
         representations = []
-        for batch in tqdm(encodings):
+        for i, batch in tqdm(enumerate(encodings)):
             output = model(batch['input_ids'], attention_mask=batch['attention_mask'], output_hidden_states=True)['hidden_states']
             pooled_output = tuple([last_token_rep(layer, batch['attention_mask'], padding=tokenizer.padding_side) for layer in output])
             representations.append(pooled_output)
-        representations = [list(batch) for batch in zip(*representations)]
-        representations = [torch.cat(batches, dim=0) for batches in representations]
-        print('Layer 1 reps shape: ')
-        print(representations[1].shape)
-        torch.save(representations, f'{YOUR_PATH}/experiments/{args.experiment}/saved_reps/{args.model_name.split("/")[-1]}_reps.pt')
+            del output 
+            torch.cuda.empty_cache()
+
+            if (i + 1) % 5000 == 0:
+                print(f"Saving representations...")
+                representations = [torch.cat(batches, dim=0) for batches in zip(*representations)]
+                torch.save(representations, os.path.join(folder, f"{args.model_name.split('/')[-1]}_reps_part_{i+1}.pt"))
+                del representations  # Free memory
+                representations = []  # Reset list
+                torch.cuda.empty_cache()
+      
+        if representations:
+            representations = [torch.cat(batches, dim=0) for batches in zip(*representations)]
+            torch.save(representations, os.path.join(folder, f"{args.model_name.split('/')[-1]}_reps_final.pt"))
 else:
     encodings = []
     for datum in data:
@@ -160,7 +166,7 @@ else:
     head_embeds = []
     with torch.no_grad():
         for i, prompt in tqdm(enumerate(encodings)):
-            prompt = prompt['input_ids']        
+            prompt = prompt['input_ids']   
             with TraceDict(model, HEADS) as ret:
                 output = model(prompt)
             head_wise_hidden_states = [ret[head].output.squeeze().detach().cpu() for head in HEADS]
@@ -173,4 +179,7 @@ else:
             head_embeds.append(head_wise_hidden_states)
 
     head_embeds = np.array(head_embeds)
-    np.save(f'{YOUR_PATH}/llm-control/experiments/{args.experiment}/saved_attn_reps/{args.model_name.split("/")[-1]}_reps.npy', head_embeds)
+    folder = f"{YOUR_PATH}/llm-control/experiments/{args.experiment}/saved_attn_reps/"
+    os.makedirs(folder, exist_ok=True)
+
+    np.save(os.path.join(folder, '{args.model_name.split("/")[-1]}_reps.npy'), head_embeds)
