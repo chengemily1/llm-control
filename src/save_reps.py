@@ -10,6 +10,9 @@ import os
 import pdb
 from config import YOUR_PATH, YOUR_TOKEN
 
+# Set the HF_HOME environment variable to your current working directory
+os.environ['YOUR_PATH'] = os.getcwd()
+
 parser = argparse.ArgumentParser(description='ID computation')
 
 # Data selection
@@ -66,12 +69,12 @@ if not os.path.exists(args.dataset_name + '/train_shuffled_balanced.csv'):
         # Load dataset based on experiment type
         dataset = load_dataset("open-r1/OpenThoughts-114k-math")
         print("Dataset loaded successfully!")
-        
+
+        breakpoint()
         # Convert to DataFrame
         df = pd.DataFrame(dataset['train'])
         # Drop rows with NaN in either 'problem' or 'solution'
         df = df.dropna(subset=['problem', 'solution'])
-        
         # Create the concatenated column
         df['problem_solution'] = df['problem'] + ' ' + df['solution']
         
