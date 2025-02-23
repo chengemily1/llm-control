@@ -1,3 +1,12 @@
+import sys
+import os
+
+# Add the parent directory to the Python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Add the src directory to the Python path
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+
 from config import YOUR_PATH, YOUR_TOKEN
 
 #import sys
@@ -18,19 +27,22 @@ import pdb
 import random
 from sklearn.metrics import f1_score
 
-from .control_wrapper import LinearControlWrapper
-from .actadd_wrapper import ActAddWrapper
+from control_wrapper import LinearControlWrapper
+from actadd_wrapper import ActAddWrapper
 #from fudge_wrapper import FudgeWrapper
-from .instructions import *
-from .data_util import encode_data
+from instructions import *
+from data_util import encode_data
+from config import YOUR_PATH, YOUR_TOKEN
 
-random.seed(42)
+# Set the HF_HOME environment variable to your current working directory
+os.environ['YOUR_PATH'] = os.getcwd()
 
 parser = argparse.ArgumentParser(description='training proof-of-concept')
 
 # Data selection
-parser.add_argument('--experiment', type=str, default='toxicity')
-parser.add_argument('--model_name', type=str, default="meta-llama/Llama-2-7b-hf")
+parser.add_argument('--dataset_name', type=str, default='../../llm_control/train_shuffled_balanced.csv')
+parser.add_argument('--experiment', type=str, default='reasoning')
+parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3-8B")
 parser.add_argument('--method', default='baseline', choices=['baseline', 'ours', 'actadd', 'instruct', 'fudge'])
 parser.add_argument('--layers', metavar='N', type=int, nargs='+',
                         help='an integer or a list of integers')
@@ -39,51 +51,52 @@ parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--device', type=str, default='cuda')
 parser.add_argument('--p', type=float, default=0.3)
 parser.add_argument('--c', help="Actadd intervention strength", type=float, default=3)
+parser.add_argument('--random_seed', type=int)
 parser.add_argument('--l', default=6, type=int)
 parser.add_argument('--s', default=None, type=float)
 args = parser.parse_args()
 
-exp = 'sentiment' if args.experiment in ('formality', 'sentiment') else 'toxicity' # reuse the sentiment prompts for formlaity
-args.dataset_name = os.path.join(YOUR_PATH, 'experiments', f'test_{exp}.csv') # last minute switch
+#exp = 'sentiment' if args.experiment in ('formality', 'sentiment') else 'toxicity' # reuse the sentiment prompts for formlaity
+#args.dataset_name = os.path.join(YOUR_PATH, 'experiments', f'test_{exp}.csv') # last minute switch
 
-ACCESS_TOKEN= YOUR_TOKEN
+# ACCESS_TOKEN= YOUR_TOKEN
+# random.seed(args.random_seed)
+# # Load the model and tokenizer
+# tokenizer = AutoTokenizer.from_pretrained(args.model_name, token=ACCESS_TOKEN)
+# model = AutoModelForCausalLM.from_pretrained(args.model_name,
+#                                              token=ACCESS_TOKEN,
+#                                              load_in_8bit=True
+#                                             )
 
-# Load the model and tokenizer
-tokenizer = AutoTokenizer.from_pretrained(args.model_name, token=ACCESS_TOKEN)
-model = AutoModelForCausalLM.from_pretrained(args.model_name,
-                                             token=ACCESS_TOKEN,
-                                             load_in_8bit=True
-                                            )
+# if 'Llama' in args.model_name:
+#     tokenizer.pad_token = tokenizer.eos_token
+#     tokenizer.padding_side = "right"
+# elif 'pythia' in args.model_name or 'mistral' in args.model_name:
+#     tokenizer.pad_token = tokenizer.eos_token
+# elif 'OLMo' in args.model_name:
+#     model.config.max_position_embeddings = model.config.max_sequence_length
 
-if 'Llama' in args.model_name:
-    tokenizer.pad_token = tokenizer.eos_token
-    tokenizer.padding_side = "right"
-elif 'pythia' in args.model_name or 'mistral' in args.model_name:
-    tokenizer.pad_token = tokenizer.eos_token
-elif 'OLMo' in args.model_name:
-    model.config.max_position_embeddings = model.config.max_sequence_length
-
-model.eval()
+# model.eval()
 # pdb.set_trace()
 
 # Load all linear probes
-num_layers = model.config.num_hidden_layers
-Ws = []
-for layer in range(1, num_layers+1):
-    probe_path = os.path.join(YOUR_PATH, 'experiments', args.experiment, 'saved_probes', 
-                             f'{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}{"_rs43" if args.experiment in ("formality", "sentiment") else ""}.pt')
+# num_layers = model.config.num_hidden_layers
+# Ws = []
+# for layer in range(1, num_layers+1):
+#     probe_path = os.path.join(YOUR_PATH, 'experiments', args.experiment, 'saved_probes', 
+#                              f'{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}{"_rs43" if args.experiment in ("formality", "sentiment") else ""}.pt')
     
-    print(f"Looking for probe at: {probe_path}")
-    try:
-        W = torch.load(probe_path).to(args.device)
-    except Exception as e:
-        print(f"Error loading probe: {e}")
-    Ws.append(W)
-    W.eval()
+#     print(f"Looking for probe at: {probe_path}")
+#     try:
+#         W = torch.load(probe_path).to(args.device)
+#     except Exception as e:
+#         print(f"Error loading probe: {e}")
+#     Ws.append(W)
+#     W.eval()
 
 # Load the dataset
-dataset = pd.read_csv(args.dataset_name)
-text_field = 'prompt'
+dataset = pd.read_csv(args.dataset_name) 
+text_field = 'problem'
 data = list(dataset[text_field])
 
 if args.method == 'instruct':
