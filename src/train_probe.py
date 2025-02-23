@@ -33,7 +33,7 @@ parser.add_argument('--path_to_data', type=str, default='../../llm_control/')
 args = parser.parse_args()
 
 if args.experiment == 'reasoning':
-    label = 'problem_solution'
+    label = 'correct'
 
 ###################  Learning configuration ###################
 ACCESS_TOKEN='YOUR TOKEN'
@@ -41,25 +41,26 @@ random.seed(args.random_seed)
 device = 'cuda:0' if args.device == 'cuda' and torch.cuda.is_available() else 'cpu'
 
 ###################  Load data ###################
-# dataset = Retrieve csv from Mayee!
+file_path = f"{args.path_to_data}/train_shuffled_balanced.csv"
+dataset = pd.read_csv(file_path)
 
 ###################  Load representations ###################
 # Load representations
 data_path = args.path_to_data
 # List all relevant files
-files = [f for f in os.listdir(data_path) if f.startswith(args.model_name.split("/")[-1]) and f.endswith('.pt')]
+#files = [f for f in os.listdir(data_path) if f.startswith(args.model_name.split("/")[-1]) and f.endswith('new.pt')]
 # Sort files numerically based on the part number
-files.sort(key=lambda x: int(x.split('_part_')[-1].split('.')[0]) if '_part_' in x else float('inf'))
+#files.sort(key=lambda x: int(x.split('_part_')[-1].split('.')[0]) if '_part_' in x else float('inf'))
 # Initialize an empty tensor for representations
-representations = None
+#representations = None
 # Load the first three files and append their contents
-for f in files[:3]:  # Only take the first three files
-    fpath = os.path.join(data_path, f)
-    loaded_reps = torch.load(fpath)[args.layer]
-    if representations is None:
-        representations = loaded_reps  # Initialize representations with the first loaded tensor
-    else:
-        representations = torch.cat((representations, loaded_reps), dim=0)  # Append the loaded tensor
+#for f in files[0:1]:  # Only take the first file
+fpath = os.path.join(data_path, 'Meta-Llama-3-8B_reps_part_5000_new.pt')
+loaded_reps = torch.load(fpath)[args.layer]
+#if representations is None:
+representations = loaded_reps  # Initialize representations with the first loaded tensor
+#else:
+#    representations = torch.cat((representations, loaded_reps), dim=0)  # Append the loaded tensor
 
 ###################  Data preparation ###################
 def get_train_val(layer, split_percent=0.8):
@@ -67,11 +68,20 @@ def get_train_val(layer, split_percent=0.8):
     Split representations into training and validation set.
     """
     labels = list(dataset[label]) # Get the labels
-    labels = [int(label) if type(label)==bool else label for label in labels]
+    # If correct is 0, then it is a correct answer
+    labels = [1 - int(label) if type(label) == bool else 1 - label for label in labels]  
+
+    # Only take labels corresponding to the first len(layer) components
+    labels = labels[:len(layer)]  # Update to slice labels based on the length of layer
 
     toxic = [i for i in range(len(labels)) if labels[i]]
+    # Calculate the target number of toxic samples
+    target_toxic_count = len(layer) // 2 - max(0, len(toxic) - (len(layer) // 2))
+    # Drop random elements until len(toxic) is target_toxic_count to ensure balanced dataset
+    if len(toxic) > target_toxic_count:
+        toxic = random.sample(toxic, target_toxic_count)  # Randomly sample to reduce size
     untoxic = random.sample([i for i in range(len(labels)) if not labels[i]], len(toxic))
-
+    
     layer_toxic = layer[toxic,:]
     layer_untoxic = layer[untoxic,:]
 
@@ -150,13 +160,14 @@ for epoch in range(num_epochs):
 # Save validation accuracy, f1
 results = {'val_acc': accs, 'val_f1': f1s, 'val_epoch': list(range(num_epochs))}
 # Create the probing_results directory if it doesn't exist
-results_dir = os.path.join(args.path_to_data, 'probing_results')
-probes_dir = os.path.join(args.path_to_data, 'saved_probes')
+path_to_data = '/experiments/reasoning'
+results_dir = os.path.join(path_to_data, 'probing_results')
+probes_dir = os.path.join(path_to_data, 'saved_probes')
 os.makedirs(results_dir, exist_ok=True)  # This will create the directory if it doesn't exist
 # Save results to file
 os.makedirs(probes_dir, exist_ok=True)
-with open(args.path_to_data + f'/probing_results/{args.model_name.split("/")[-1]}_layer_{args.layer}_rs{args.random_seed}{f"_downsample_{args.downsample}" if args.downsample < 1 else ""}_validation_results_over_training.json', 'w') as f:
+with open(path_to_data + f'/probing_results/{args.model_name.split("/")[-1]}_layer_{args.layer}_rs{args.random_seed}{f"_downsample_{args.downsample}" if args.downsample < 1 else ""}_validation_results_over_training.json', 'w') as f:
     json.dump(results, f)
 # Save probe
 if args.save:
-    torch.save(linear_probe, f'{args.path_to_data}/saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{args.layer}_rs{args.random_seed}{f"_downsample_{args.downsample}" if args.downsample < 1 else ""}.pt')
+    torch.save(linear_probe, f'{path_to_data}/saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{args.layer}_rs{args.random_seed}{f"_downsample_{args.downsample}" if args.downsample < 1 else ""}.pt')
