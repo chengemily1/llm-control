@@ -28,8 +28,8 @@ parser.add_argument('--layer', type=int)
 parser.add_argument('--random_seed', type=int)
 parser.add_argument('--downsample', type=float, default=1)
 # Directory management
-parser.add_argument('--save', type=int, choices=[0,1], default=0, help='whether to save the probe')
-parser.add_argument('--path_to_data', type=str, default='../../llm_control/')
+parser.add_argument('--save', type=int, choices=[0,1], default=1, help='whether to save the probe')
+parser.add_argument('--path_to_data', type=str, default='../../shared_data/llm_control/')
 args = parser.parse_args()
 
 if args.experiment == 'reasoning':
@@ -160,14 +160,14 @@ for epoch in range(num_epochs):
 # Save validation accuracy, f1
 results = {'val_acc': accs, 'val_f1': f1s, 'val_epoch': list(range(num_epochs))}
 # Create the probing_results directory if it doesn't exist
-path_to_data = '/experiments/reasoning'
-results_dir = os.path.join(path_to_data, 'probing_results')
-probes_dir = os.path.join(path_to_data, 'saved_probes')
+#path_to_data = '/experiments/reasoning'
+results_dir = os.path.join(args.path_to_data, 'probing_results')
+probes_dir = os.path.join(args.path_to_data, 'saved_probes')
 os.makedirs(results_dir, exist_ok=True)  # This will create the directory if it doesn't exist
 # Save results to file
 os.makedirs(probes_dir, exist_ok=True)
-with open(path_to_data + f'/probing_results/{args.model_name.split("/")[-1]}_layer_{args.layer}_rs{args.random_seed}{f"_downsample_{args.downsample}" if args.downsample < 1 else ""}_validation_results_over_training.json', 'w') as f:
+with open(args.path_to_data + f'/probing_results/{args.model_name.split("/")[-1]}_layer_{args.layer}_rs{args.random_seed}{f"_downsample_{args.downsample}" if args.downsample < 1 else ""}_validation_results_over_training.json', 'w') as f:
     json.dump(results, f)
 # Save probe
 if args.save:
-    torch.save(linear_probe, f'{path_to_data}/saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{args.layer}_rs{args.random_seed}{f"_downsample_{args.downsample}" if args.downsample < 1 else ""}.pt')
+    torch.save(linear_probe, f'{args.path_to_data}/saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{args.layer}_rs{args.random_seed}{f"_downsample_{args.downsample}" if args.downsample < 1 else ""}.pt')

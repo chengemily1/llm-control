@@ -9,13 +9,9 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 from config import YOUR_PATH, YOUR_TOKEN
 
-#import sys
-#sys.path.insert(0,"YOUR_PATH/src")
-
 import argparse
 import torch
 import torch.nn as nn
-import os
 
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_dataset
@@ -36,71 +32,79 @@ from config import YOUR_PATH, YOUR_TOKEN
 
 # Set the HF_HOME environment variable to your current working directory
 os.environ['YOUR_PATH'] = os.getcwd()
+ACCESS_TOKEN = YOUR_TOKEN 
 
 parser = argparse.ArgumentParser(description='training proof-of-concept')
 
 # Data selection
-parser.add_argument('--dataset_name', type=str, default='../../llm_control/train_shuffled_balanced.csv')
+parser.add_argument('--dataset_name', type=str, default='../../shared_data/llm_control/train_shuffled_balanced.csv')
 parser.add_argument('--experiment', type=str, default='reasoning')
 parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3-8B")
-parser.add_argument('--method', default='baseline', choices=['baseline', 'ours', 'actadd', 'instruct', 'fudge'])
+parser.add_argument('--method', default='ours', choices=['baseline', 'ours', 'actadd', 'instruct', 'fudge'])
 parser.add_argument('--layers', metavar='N', type=int, nargs='+',
                         help='an integer or a list of integers')
 parser.add_argument('--continuous_tune', type=int, default=0)
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--device', type=str, default='cuda')
-parser.add_argument('--p', type=float, default=0.3)
-parser.add_argument('--c', help="Actadd intervention strength", type=float, default=3)
+parser.add_argument('--p', type=float, default=0.1)
+#parser.add_argument('--c', help="Actadd intervention strength", type=float, default=3)
 parser.add_argument('--random_seed', type=int)
-parser.add_argument('--l', default=6, type=int)
-parser.add_argument('--s', default=None, type=float)
+#parser.add_argument('--l', default=6, type=int)
+#parser.add_argument('--s', default=None, type=float)
 args = parser.parse_args()
 
 #exp = 'sentiment' if args.experiment in ('formality', 'sentiment') else 'toxicity' # reuse the sentiment prompts for formlaity
 #args.dataset_name = os.path.join(YOUR_PATH, 'experiments', f'test_{exp}.csv') # last minute switch
+   
+random.seed(args.random_seed)
+# Load the model and tokenizer
+tokenizer = AutoTokenizer.from_pretrained(args.model_name, token=ACCESS_TOKEN)
+model = AutoModelForCausalLM.from_pretrained(args.model_name,
+                                             token=ACCESS_TOKEN,
+                                             load_in_8bit=True
+                                            )
 
-# ACCESS_TOKEN= YOUR_TOKEN
-# random.seed(args.random_seed)
-# # Load the model and tokenizer
-# tokenizer = AutoTokenizer.from_pretrained(args.model_name, token=ACCESS_TOKEN)
-# model = AutoModelForCausalLM.from_pretrained(args.model_name,
-#                                              token=ACCESS_TOKEN,
-#                                              load_in_8bit=True
-#                                             )
+if 'Llama' in args.model_name:
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "right"
+elif 'pythia' in args.model_name or 'mistral' in args.model_name:
+    tokenizer.pad_token = tokenizer.eos_token
+elif 'OLMo' in args.model_name:
+    model.config.max_position_embeddings = model.config.max_sequence_length
 
-# if 'Llama' in args.model_name:
-#     tokenizer.pad_token = tokenizer.eos_token
-#     tokenizer.padding_side = "right"
-# elif 'pythia' in args.model_name or 'mistral' in args.model_name:
-#     tokenizer.pad_token = tokenizer.eos_token
-# elif 'OLMo' in args.model_name:
-#     model.config.max_position_embeddings = model.config.max_sequence_length
-
-# model.eval()
+model.eval()
 # pdb.set_trace()
 
 # Load all linear probes
-# num_layers = model.config.num_hidden_layers
-# Ws = []
-# for layer in range(1, num_layers+1):
-#     probe_path = os.path.join(YOUR_PATH, 'experiments', args.experiment, 'saved_probes', 
-#                              f'{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}{"_rs43" if args.experiment in ("formality", "sentiment") else ""}.pt')
-    
-#     print(f"Looking for probe at: {probe_path}")
-#     try:
-#         W = torch.load(probe_path).to(args.device)
-#     except Exception as e:
-#         print(f"Error loading probe: {e}")
-#     Ws.append(W)
-#     W.eval()
+num_layers = model.config.num_hidden_layers
+Ws = []
+for layer in range(1, num_layers+1):
+    #probe_path = os.path.join(YOUR_PATH, 'experiments', args.experiment, 'saved_probes', 
+    probe_path = os.path.join('../../shared_data/llm_control/saved_probes',
+                             #f'{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}{"_rs43" if args.experiment in ("formality", "sentiment") else ""}.pt')
+                             f'{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}{"_rsNone"}.pt')
+
+    print(f"Looking for probe at: {probe_path}")
+    try:
+        W = torch.load(probe_path).to(args.device)
+    except Exception as e:
+        print(f"Error loading probe: {e}")
+
+    Ws.append(W)
+    W.eval()
 
 # Load the dataset
 dataset = pd.read_csv(args.dataset_name) 
 text_field = 'problem'
 data = list(dataset[text_field])
+# Load the reps used for training
+model_reps_path = os.path.join('../../shared_data/llm_control/', 'Meta-Llama-3-8B_reps_final_new.pt')
+model_reps = torch.load(model_reps_path)
+# Exclude the first len(model_reps) rows from the dataset
+data = data[len(model_reps):len(model_reps)+100]  # Update to skip the first len(model_reps) rows
 
-if args.method == 'instruct':
-    data = transform_dataset(data, args.experiment, bool(args.continuous_tune), S=args.s)
+# if args.method == 'instruct':
+#     data = transform_dataset(data, args.experiment, bool(args.continuous_tune), S=args.s)
 
 # ORIGINAL BASELINE
 model.eval()
@@ -113,27 +117,27 @@ else:
     layerlist = model.model.layers
 
 ###################### ACTADD
-if args.method == 'actadd':
-    # load the layersteers
-    steers = torch.load(
-        os.path.join(YOUR_PATH, 'experiments', args.experiment, 'saved_layersteers', 
-                     f'{args.model_name.split("/")[-1]}_steers.pt')
-    )[1:]
-    # wrap the layers
-    layerlist[args.l] = ActAddWrapper(layerlist[args.l], steers[args.l].to(args.device), c=args.c)
+# if args.method == 'actadd':
+#     # load the layersteers
+#     steers = torch.load(
+#         os.path.join(YOUR_PATH, 'experiments', args.experiment, 'saved_layersteers', 
+#                      f'{args.model_name.split("/")[-1]}_steers.pt')
+#     )[1:]
+#     # wrap the layers
+#     layerlist[args.l] = ActAddWrapper(layerlist[args.l], steers[args.l].to(args.device), c=args.c)
 
 ###################### FUDGE
-if args.method == 'fudge':
-    # find the unembedding matrix and wrap it.
-    # print(model)
-    # pdb.set_trace()
-    if 'pythia' in args.model_name:
-        model.embed_out = FudgeWrapper(model.embed_out, args.experiment, tokenizer, device=args.device, k=50)
-        lm_head = model.embed_out
-    else:
-        model.lm_head = FudgeWrapper(model.lm_head, args.experiment, tokenizer, device=args.device, k=50)
-        lm_head = model.lm_head
-    # pdb.set_trace()
+# if args.method == 'fudge':
+#     # find the unembedding matrix and wrap it.
+#     # print(model)
+#     # pdb.set_trace()
+#     if 'pythia' in args.model_name:
+#         model.embed_out = FudgeWrapper(model.embed_out, args.experiment, tokenizer, device=args.device, k=50)
+#         lm_head = model.embed_out
+#     else:
+#         model.lm_head = FudgeWrapper(model.lm_head, args.experiment, tokenizer, device=args.device, k=50)
+#         lm_head = model.lm_head
+#     # pdb.set_trace()
 
 def retrofit_model(Ws):
     # Wrap all of the layers of the model
@@ -152,7 +156,6 @@ def retrofit_model(Ws):
                 p=args.p,
                 continuous_tune=bool(args.continuous_tune)
             )
-
 
 retrofit_model(Ws)
 
@@ -181,12 +184,12 @@ for i, datum in tqdm(enumerate(data)):
     print(data[i])
 
     try:
-        if args.method == 'fudge':
-            lm_head.store_batch_prompts([datum])
+        # if args.method == 'fudge':
+        #     lm_head.store_batch_prompts([datum])
         outputs = model.generate(
             inputs=encoding['input_ids'], # batch size x seq len
             min_new_tokens=1,
-            max_new_tokens=50,
+            max_new_tokens=200,
             do_sample=False,
             return_dict_in_generate=True,
             output_scores=True
@@ -205,6 +208,8 @@ for i, datum in tqdm(enumerate(data)):
     results_dict[data[i]]['token'] = generated_tokens_text
     results_dict[data[i]]['surprisal'] = surprisals
 
+    print(results_dict[data[i]]['generated_text'])
+
     # Semantic scores log:
     for layer in range(num_layers):
         pre_adjust_scores = [float(score.item()) for score in layerlist[layer].pre_adjust_toxicity_log.copy()]
@@ -215,15 +220,35 @@ for i, datum in tqdm(enumerate(data)):
         results_dict[data[i]][layer]['inference_latency'] = latency
 
 # Save data
-if args.method == 'actadd':
-    args.method = args.method + f'_c{args.c}_l{args.l}'
-if args.method == 'fudge':
-    results_dict['overall_latency'] = lm_head.latency
+# if args.method == 'actadd':
+#     args.method = args.method + f'_c{args.c}_l{args.l}'
+# if args.method == 'fudge':
+#     results_dict['overall_latency'] = lm_head.latency
 
-if args.continuous_tune:
-    args.method += '_continuous'
-    if 'instruct' in args.method:
-        args.method += f'_{args.s}'
+# if args.continuous_tune:
+#     args.method += '_continuous'
+#     if 'instruct' in args.method:
+#         args.method += f'_{args.s}'
 
-with open(f'{YOUR_PATH}/experiments/{args.experiment}/control_results/{args.model_name.split("/")[-1]}_p_{args.p}_{args.method}.json', 'w') as f:
+# Define the path for the results file
+results_dir = '../../shared_data/llm_control/experiments/control_results/'
+os.makedirs(results_dir, exist_ok=True)  # Create the directory if it doesn't exist
+
+# Now you can safely open the file for writing
+with open(os.path.join(results_dir, f"{args.model_name.split('/')[-1]}_p_{args.p}_{args.method}.json"), 'w') as f:
     json.dump(results_dict, f)
+
+#with open(f'{YOUR_PATH}/experiments/{args.experiment}/control_results/{args.model_name.split("/")[-1]}_p_{args.p}_{args.method}.json', 'w') as f:
+#    json.dump(results_dict, f)
+
+# Define the path for the results CSV file
+results_csv_path = os.path.join(results_dir, 'generated_results.csv')
+
+# Prepare data for the CSV
+csv_data = []
+for i in range(len(data)):
+    csv_data.append([data[i], results_dict[data[i]]['generated_text']])
+
+# Create a DataFrame and save it to a CSV file
+df = pd.DataFrame(csv_data, columns=['Input', 'Generated Text'])
+df.to_csv(results_csv_path, index=False)  # Save to CSV without the index
