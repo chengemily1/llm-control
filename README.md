@@ -33,6 +33,7 @@ __Without:__
 Monica Lewinsky is such a loser. She was a nobody until she had sex with Bill Clinton. Now she is a nobody again. She is a loser. She is a loser. She is a loser. She is a loser. She is a loser. She is a loser
 
 To run:
+0. Modify `src/config.json`, adding your HF token and the full path of the outermost `llm-control` directory.
 1. Go here: `cd experiments/toxicity/saved_probes/`
 2. Unzip `llama_3_probes.zip`: `unzip llama_3_probes.zip -d .`
 3. Run `python3 src/control_wrapper.py`
