@@ -11,7 +11,6 @@ import torch.nn as nn
 from sklearn.metrics import f1_score
 import pdb
 
-from config import YOUR_PATH, YOUR_TOKEN
 
 parser = argparse.ArgumentParser(description='Train probe')
 
@@ -33,15 +32,15 @@ parser.add_argument('--save', type=int, choices=[0,1], default=0, help='whether 
 args = parser.parse_args()
 print(args)
 
-ACCESS_TOKEN='YOUR TOKEN'
+ACCESS_TOKEN='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'
 random.seed(args.random_seed)
 
 DATASET_PATH = {
-    'toxicity': f'{YOUR_PATH}/jigsaw-toxic-comment-classification-challenge/train_shuffled_balanced.csv',
-    'sentiment': f'{YOUR_PATH}/sentiment-constraint-set/train_shuffled_balanced.csv',
-    'formality': f'{YOUR_PATH}/formality-constraint-set/train_shuffled_balanced.csv'
+    'toxicity': '/home/echeng/llm-control/jigsaw-toxic-comment-classification-challenge/train_shuffled_balanced.csv',
+    'sentiment': '/home/echeng/llm-control/sentiment-constraint-set/train_shuffled_balanced.csv',
+    'formality': '/home/echeng/llm-control/formality-constraint-set/train_shuffled_balanced.csv',
 }
-args.path_to_reps = f'{YOUR_PATH}/experiments/{args.experiment}/'
+args.path_to_reps = f'/home/echeng/llm-control/experiments/{args.experiment}/'
 
 # model.eval()
 device = 'cuda:0' if args.device == 'cuda' and torch.cuda.is_available() else 'cpu'
