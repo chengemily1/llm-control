@@ -1,12 +1,6 @@
-from config import YOUR_PATH, YOUR_TOKEN
-
-#import sys
-#sys.path.insert(0,"YOUR_PATH/src")
-
 import argparse
 import torch
 import torch.nn as nn
-import os
 
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_dataset
@@ -18,11 +12,11 @@ import pdb
 import random
 from sklearn.metrics import f1_score
 
-from .control_wrapper import LinearControlWrapper
-from .actadd_wrapper import ActAddWrapper
-#from fudge_wrapper import FudgeWrapper
-from .instructions import *
-from .data_util import encode_data
+from control_wrapper import LiSeCoWrapper
+from actadd_wrapper import ActAddWrapper
+from fudge_wrapper import FudgeWrapper
+from instructions import *
+from data_util import encode_data
 
 random.seed(42)
 
@@ -34,19 +28,26 @@ parser.add_argument('--model_name', type=str, default="meta-llama/Llama-2-7b-hf"
 parser.add_argument('--method', default='baseline', choices=['baseline', 'ours', 'actadd', 'instruct', 'fudge'])
 parser.add_argument('--layers', metavar='N', type=int, nargs='+',
                         help='an integer or a list of integers')
-parser.add_argument('--continuous_tune', type=int, default=0)
-parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--device', type=str, default='cuda')
-parser.add_argument('--p', type=float, default=0.3)
+parser.add_argument('--liseco_lower', type=float, default=0.0)
+parser.add_argument('--liseco_upper', type=float, default=0.3)
+parser.add_argument('--liseco_map', default='sigmoid', choices=['sigmoid', 'tanh', 'identity'])
 parser.add_argument('--c', help="Actadd intervention strength", type=float, default=3)
 parser.add_argument('--l', default=6, type=int)
 parser.add_argument('--s', default=None, type=float)
+parser.add_argument('--config', default='src/config.json', help='path to config file')
 args = parser.parse_args()
 
 exp = 'sentiment' if args.experiment in ('formality', 'sentiment') else 'toxicity' # reuse the sentiment prompts for formlaity
-args.dataset_name = os.path.join(YOUR_PATH, 'experiments', f'test_{exp}.csv') # last minute switch
 
-ACCESS_TOKEN= YOUR_TOKEN
+with open(args.config, 'r') as f:
+    CONFIG = json.load(f)
+
+ACCESS_TOKEN = CONFIG['hf_access_token']
+YOUR_PATH = CONFIG['path']
+
+args.dataset_name = f'{YOUR_PATH}/experiments/test_{exp}.csv' # last minute switch
+
 
 # Load the model and tokenizer
 tokenizer = AutoTokenizer.from_pretrained(args.model_name, token=ACCESS_TOKEN)
@@ -68,18 +69,14 @@ model.eval()
 
 # Load all linear probes
 num_layers = model.config.num_hidden_layers
-Ws = []
-for layer in range(1, num_layers+1):
-    probe_path = os.path.join(YOUR_PATH, 'experiments', args.experiment, 'saved_probes', 
-                             f'{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}{"_rs43" if args.experiment in ("formality", "sentiment") else ""}.pt')
-    
-    print(f"Looking for probe at: {probe_path}")
-    try:
-        W = torch.load(probe_path).to(args.device)
-    except Exception as e:
-        print(f"Error loading probe: {e}")
-    Ws.append(W)
-    W.eval()
+
+Ws = [
+    torch.load(
+        f'{YOUR_PATH}/experiments/{args.experiment}/saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}{"_rs43" if args.experiment in ("formality", "sentiment") else ""}.pt'
+        ).to(args.device)
+    for layer in range(1, num_layers+1)
+]
+[W.eval() for W in Ws]
 
 # Load the dataset
 dataset = pd.read_csv(args.dataset_name)
@@ -87,7 +84,7 @@ text_field = 'prompt'
 data = list(dataset[text_field])
 
 if args.method == 'instruct':
-    data = transform_dataset(data, args.experiment, bool(args.continuous_tune), S=args.s)
+    data = transform_dataset(data, args.experiment, 0, S=args.s)
 
 # ORIGINAL BASELINE
 model.eval()
@@ -103,9 +100,8 @@ else:
 if args.method == 'actadd':
     # load the layersteers
     steers = torch.load(
-        os.path.join(YOUR_PATH, 'experiments', args.experiment, 'saved_layersteers', 
-                     f'{args.model_name.split("/")[-1]}_steers.pt')
-    )[1:]
+        f'{YOUR_PATH}/experiments/{args.experiment}/saved_layersteers/{args.model_name.split("/")[-1]}_steers.pt'
+        )[1:]
     # wrap the layers
     layerlist[args.l] = ActAddWrapper(layerlist[args.l], steers[args.l].to(args.device), c=args.c)
 
@@ -125,19 +121,21 @@ if args.method == 'fudge':
 def retrofit_model(Ws):
     # Wrap all of the layers of the model
     for layer in range(num_layers):
-        if type(layerlist[layer]) != LinearControlWrapper:
-            layerlist[layer] = LinearControlWrapper(
+        if type(layerlist[layer]) != LiSeCoWrapper:
+            layerlist[layer] = LiSeCoWrapper(
                 layerlist[layer],
                 linear_probe=Ws[layer],
-                p=args.p,
-                continuous_tune=bool(args.continuous_tune)
+                lower=args.liseco_lower,
+                upper=args.liseco_upper,
+                map_to_target_space=args.liseco_map
             )
         else:
-            layerlist[layer] = LinearControlWrapper(
+            layerlist[layer] = LiSeCoWrapper(
                 layerlist[layer].base_layer,
                 linear_probe=Ws[layer],
-                p=args.p,
-                continuous_tune=bool(args.continuous_tune)
+                lower=args.liseco_lower,
+                upper=args.liseco_upper,
+                map_to_target_space=args.liseco_map
             )
 
 
@@ -207,10 +205,6 @@ if args.method == 'actadd':
 if args.method == 'fudge':
     results_dict['overall_latency'] = lm_head.latency
 
-if args.continuous_tune:
-    args.method += '_continuous'
-    if 'instruct' in args.method:
-        args.method += f'_{args.s}'
 
 with open(f'{YOUR_PATH}/experiments/{args.experiment}/control_results/{args.model_name.split("/")[-1]}_p_{args.p}_{args.method}.json', 'w') as f:
     json.dump(results_dict, f)
