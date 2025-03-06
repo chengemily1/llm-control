@@ -1,3 +1,6 @@
+#########################
+# Imports
+#########################
 import argparse
 import torch
 from transformers import AutoModelForCausalLM, GPTNeoXTokenizerFast, AutoTokenizer
@@ -15,20 +18,26 @@ os.environ['YOUR_PATH'] = os.getcwd()
 
 parser = argparse.ArgumentParser(description='ID computation')
 
-# Data selection
+#########################
+# Arguments
+#########################
 parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3-8B")
-parser.add_argument('--dataset_name', type=str, default=f'{YOUR_PATH}/OpenThoughts-114k-math')
+parser.add_argument('--dataset_name', type=str, default=f'{YOUR_PATH}/elix_generations_gpt4omini_pref')
 parser.add_argument('--attn', type=int, default=0)
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--device', type=str, default='cuda')
-parser.add_argument('--experiment', default='sentiment', 
-                   choices=['sentiment', 'toxicity', 'formality', 'reasoning'])
+parser.add_argument('--experiment', default='elix')
+parser.add_argument('--user', default='child', choices=['child', 'preteen', 'teenager', ' young adult', 'expert'])
 args = parser.parse_args()
 print(args)
 
+text_col = {'elix': 'prompt_response'}
+
 ACCESS_TOKEN= YOUR_TOKEN
 
+#########################
 # Load the model and tokenizer
+#########################   
 tokenizer = AutoTokenizer.from_pretrained(args.model_name, 
                                           token=ACCESS_TOKEN,
                                           trust_remote_code=True,
@@ -38,7 +47,6 @@ model = AutoModelForCausalLM.from_pretrained(args.model_name,
                                              load_in_8bit=True,
                                              trust_remote_code=True
                                             )
-
 if 'Llama' in args.model_name:
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
@@ -49,48 +57,142 @@ elif 'OLMo' in args.model_name:
 
 model.eval()
 
-# Shuffle the dataset
-text_col = {'toxicity': 'comment_text', 'sentiment': 'text', 'formality': 'sentence', 'reasoning': 'problem_solution'}
-
-def balance_labels(label_name, df):
-    labels = df[label_name]
-    minority = 1 if labels.sum() < 0.5 * len(labels) else 0
-    
-    # get all the minority labels
-    minority_df = df[df[label_name] == minority]
-    majority_df = df[df[label_name] == (1 if not minority else 0)].sample(len(minority_df))
-    
-    return pd.concat([minority_df, majority_df])
-
+#########################
+# Load the dataset
+#########################
 os.makedirs(args.dataset_name, exist_ok=True)
 if not os.path.exists(args.dataset_name + '/train_shuffled_balanced.csv'):
-    # For handling HuggingFace dataset
-    if args.experiment == 'reasoning':
-        # Load dataset based on experiment type
-        dataset = load_dataset("open-r1/OpenThoughts-114k-math")
+    ############## ELIX DATASET ##############
+    if args.experiment == 'elix':
+        # Define the users
+        user_id = {'child': 1, 'preteen': 2, 'teenager': 3, ' young adult': 4, 'expert': 5}
+        # Load dataset
+        dataset = load_dataset("Asap7772/elix_generations_gpt4omini_pref")
         print("Dataset loaded successfully!")
 
-        breakpoint()
         # Convert to DataFrame
         df = pd.DataFrame(dataset['train'])
-        # Drop rows with NaN in either 'problem' or 'solution'
-        df = df.dropna(subset=['problem', 'solution'])
-        # Create the concatenated column
-        df['problem_solution'] = df['problem'] + ' ' + df['solution']
         
-        # Balance the dataset and shuffle it
-        balanced_df = balance_labels('correct', df).sample(frac=1)
-        balanced_df.to_csv(args.dataset_name + '/train_shuffled_balanced.csv', index=False)
-    else:
-    # For other experiments using local files
-        dataset = pd.read_csv(args.dataset_name + '/train_shuffled.csv')
-        balanced_df = balance_labels('toxic', dataset).sample(frac=1)
-        balanced_df.to_csv(args.dataset_name + '/train_shuffled_balanced.csv')
+        # Remove unwanted columns
+        columns_to_drop = ['level_x', 'level_y', 'model_name_x', 'model_name_y', 'scorer_level', '__index_level_0__']
+        df = df.drop(columns=columns_to_drop)
+        
+        # Filter by scorer level
+        df = df[df['scorer_level_id'] == user_id[args.user]]
+        df = df.drop(columns='scorer_level_id')
+        
+        # Create scoring system based on preferences
+        def calculate_level_scores(df):
+            # Initialize scores for each level
+            level_scores = {}
+            
+            # Count wins for each level
+            for _, row in df.iterrows():
+                if row['label'] == 0:  # response_x preferred
+                    level_scores[row['level_id_x']] = level_scores.get(row['level_id_x'], 0) + 1
+                else:  # response_y preferred
+                    level_scores[row['level_id_y']] = level_scores.get(row['level_id_y'], 0) + 1
+            
+            # Normalize scores by number of comparisons each level participated in
+            level_counts = {}
+            for _, row in df.iterrows():
+                level_counts[row['level_id_x']] = level_counts.get(row['level_id_x'], 0) + 1
+                level_counts[row['level_id_y']] = level_counts.get(row['level_id_y'], 0) + 1
+            
+            normalized_scores = {
+                level: score / level_counts[level] 
+                for level, score in level_scores.items()
+            }
+            
+            return normalized_scores
+        
+        # Calculate scores
+        level_scores = calculate_level_scores(df)
+        
+        print("\nLevel scores (normalized by number of comparisons):")
+        for level, score in sorted(level_scores.items()):
+            print(f"Level {level}: {score:.3f}")
+        
+        # Reorganize dataset into separate rows for each response
+        def split_comparisons(df):
+            # Create DataFrame for response_x
+            df_x = df.copy()
+            df_x['response'] = df_x['response_x']
+            df_x['level_id'] = df_x['level_id_x']
+            df_x['score'] = df_x['level_id_x'].map(level_scores)
+            df_x['prompt_response'] = df_x['prompt'] + ' ' + df_x['response_x']
+            
+            # Create DataFrame for response_y
+            df_y = df.copy()
+            df_y['response'] = df_y['response_y']
+            df_y['level_id'] = df_y['level_id_y']
+            df_y['score'] = df_y['level_id_y'].map(level_scores)
+            df_y['prompt_response'] = df_y['prompt'] + ' ' + df_y['response_y']
+            
+            # Combine and clean up
+            combined_df = pd.concat([df_x, df_y], ignore_index=True)
+            
+            # Keep only relevant columns
+            columns_to_keep = ['prompt', 'response', 'prompt_response', 'level_id', 'score']
+            combined_df = combined_df[columns_to_keep]
+            
+            # Remove duplicates (in case same response appears in multiple comparisons)
+            combined_df = combined_df.drop_duplicates(subset=['prompt_response'])
+            
+            return combined_df
+        
+        def balance_by_score(df):
+            # Get the minimum count of any score
+            score_counts = df.groupby('score').size()
+            min_count = score_counts.min()
+            
+            # For each score, sample down to the minimum count
+            balanced_dfs = []
+            for score in df['score'].unique():
+                score_df = df[df['score'] == score]
+                if len(score_df) > min_count:
+                    # Randomly sample down to min_count
+                    balanced_df = score_df.sample(n=min_count, random_state=42)
+                else:
+                    balanced_df = score_df
+                balanced_dfs.append(balanced_df)
+            
+            # Combine all balanced dataframes
+            balanced_df = pd.concat(balanced_dfs, ignore_index=True)
+            
+            # Print statistics about the balancing
+            print("\nBefore balancing:")
+            print(df.groupby('score').size())
+            print("\nAfter balancing:")
+            print(balanced_df.groupby('score').size())
+            
+            return balanced_df
+        
+        # First reorganize the dataset
+        reorganized_df = split_comparisons(df)
+        
+        # Then balance by score
+        reorganized_df = balance_by_score(reorganized_df)
+        
+        print(f"\nOriginal dataset shape: {df.shape}")
+        print(f"Reorganized dataset shape: {reorganized_df.shape}")
+        print("\nReorganized dataset columns:")
+        print(reorganized_df.columns.tolist())
+        
+        # Count rows for each score
+        print("\nNumber of rows for each score:")
+        score_counts = reorganized_df.groupby('score').size().sort_index()
+        for score, count in score_counts.items():
+            print(f"Score {score:.3f}: {count} rows")
+        
+        # Shuffle and save the reorganized dataset
+        reorganized_df = reorganized_df.sample(frac=1, random_state=42).reset_index(drop=True)
+        reorganized_df.to_csv(args.dataset_name + '/train_shuffled_balanced.csv', index=False)
+        print(f"\nReorganized dataset saved to {args.dataset_name}/train_shuffled_balanced.csv")
 
-    # Drop rows where the target text column is NaN        
-    balanced_df = balanced_df.dropna(subset=[text_col[args.experiment]])
-    balanced_df.to_csv(args.dataset_name + '/train_shuffled_balanced.csv')
-
+#########################
+# ENCODE DATA
+#########################
 def encode_data(tokenizer, N, data, batch_size, max_length, device):
     # last_k (int): only use the last k tokens of the input
 
@@ -121,7 +223,7 @@ def encode_data(tokenizer, N, data, batch_size, max_length, device):
 dataset = pd.read_csv(args.dataset_name + '/train_shuffled_balanced.csv', keep_default_na=False)
 data = list(dataset[text_col[args.experiment]])
 
-# tokenize data
+
 if not args.attn:
     print("Encoding data")
     encodings = encode_data(tokenizer, len(data), data, args.batch_size, model.config.max_position_embeddings, args.device)
@@ -132,7 +234,9 @@ if not args.attn:
         last_token_rep = x[torch.arange(x.size(0)), indices] if padding=='right' else x[torch.arange(x.size(0)), -1]
         return last_token_rep.cpu()
 
+    #########################
     # PROCESS AND SAVE REPS
+    #########################   
     print("processing and saving reps")
     folder = f"{YOUR_PATH}/experiments/{args.experiment}/saved_reps/"
     os.makedirs(folder, exist_ok=True)
@@ -156,6 +260,8 @@ if not args.attn:
         if representations:
             representations = [torch.cat(batches, dim=0) for batches in zip(*representations)]
             torch.save(representations, os.path.join(folder, f"{args.model_name.split('/')[-1]}_reps_final.pt"))
+
+#########################
 else:
     encodings = []
     for datum in data:
