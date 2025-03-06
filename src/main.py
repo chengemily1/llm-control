@@ -147,7 +147,7 @@ def main():
     test_dataset = load_dataset("Asap7772/elix_generations_gpt4omini_pref")
     dataset = pd.DataFrame(test_dataset['test'])
     text_field = 'prompt'
-    data = list(dataset[text_field])
+    data = dataset[text_field].drop_duplicates().tolist()
     
     # Initialize results dictionary
     results_dict = {}
@@ -167,7 +167,7 @@ def main():
              #   layerlist[layer].control_off()
         
         # Generate output
-        print(data[i])
+        print(datum)
         
         try:
             prompt = f"Question: {datum}\nAnswer:"
@@ -193,23 +193,21 @@ def main():
             generated_tokens_text = [tokenizer.decode(token) for token in generated_tokens[0]]
             surprisals = [-float(score.cpu().numpy()) for score in transition_scores[0]]
             
-            results_dict[data[i]].update({
+            results_dict[datum].update({
                 'generated_text': tokenizer.decode(*outputs[0], skip_special_tokens=True),
                 'token': generated_tokens_text,
                 'surprisal': surprisals
             })
             
-            print(results_dict[data[i]]['generated_text'])
-
-            breakpoint()
+            print(results_dict[datum]['generated_text'])
             
             # Store layer-specific scores
-            for layer in range(len(layerlist)):
-                results_dict[data[i]][layer].update({
-                    'pre_adjust_toxicity_prob': [float(score.item()) for score in layerlist[layer].pre_adjust_toxicity_log.copy()],
-                    'post_adjust_toxicity_prob': [float(score.item()) for score in layerlist[layer].post_adjust_toxicity_log.copy()],
-                    'inference_latency': layerlist[layer].latency.copy()
-                })
+            #for layer in range(len(layerlist)):
+            #    results_dict[data[i]][layer].update({
+            #        'pre_adjust_toxicity_prob': [float(score.item()) for score in layerlist[layer].pre_adjust_toxicity_log.copy()],
+            #        'post_adjust_toxicity_prob': [float(score.item()) for score in layerlist[layer].post_adjust_toxicity_log.copy()],
+            #        'inference_latency': layerlist[layer].latency.copy()
+            #    })
                 
         except IndexError:
             continue
@@ -227,7 +225,7 @@ def main():
         json.dump(results_dict, f)
     
     # Save CSV results
-    csv_data = [[data[i], results_dict[data[i]]['generated_text']] for i in range(len(data))]
+    csv_data = [[datum, results_dict[datum]['generated_text']] for datum in data]
     df = pd.DataFrame(csv_data, columns=['Input', 'Generated Text'])
     df.to_csv(os.path.join(results_dir, 'generated_results.csv'), index=False)
 
