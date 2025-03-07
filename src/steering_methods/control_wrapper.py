@@ -14,13 +14,15 @@ from transformers.models.gemma.modeling_gemma import GemmaDecoderLayer
 from transformers.models.mixtral.modeling_mixtral import MixtralDecoderLayer
 from transformers.models.qwen2.modeling_qwen2 import Qwen2DecoderLayer
 
-from data_util import encode_data  # Changed from src.data_util to just data_util
+from src.utils.data_utils import encode_data  # Updated import path to use data_utils from utils
 import json
 import pandas as pd
 from tqdm import tqdm
 import random
 from sklearn.metrics import f1_score 
 from scipy import optimize
+from src.utils.config_utils import load_config
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 # Different strictly monotone functions 
@@ -220,9 +222,10 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
 
 if __name__ == "__main__":
     # Example code for running
-    with open('/home/echeng/llm-control/src/config.json', 'r') as f:
-        
-        ACCESS_TOKEN = json.load(f)['hf_access_token']
+    # Load configuration
+    config = load_config('src/config.json')
+    ACCESS_TOKEN = config['access_token']
+    BASE_PATH = config['base_path']
 
     MODEL = 'meta-llama/Meta-Llama-3-8B'
     DEVICE = 'cuda'
@@ -245,7 +248,7 @@ if __name__ == "__main__":
 
     # Load in the probe 
     Ws = [torch.load(
-            f'./experiments/{EXP}/saved_probes/{MODEL.split("/")[-1]}_linear_probe_layer_{LAYER}_rs0.pt'
+            f'{BASE_PATH}/experiments/{EXP}/saved_probes/{MODEL.split("/")[-1]}_linear_probe_layer_{LAYER}_rs0.pt'
             ).to(DEVICE) for LAYER in LAYERS
     ]
     [W.eval() for W in Ws]
