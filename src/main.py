@@ -1,3 +1,12 @@
+import sys
+import os
+
+# Add the parent directory to the Python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Add the src directory to the Python path
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+
 import argparse
 import torch
 import torch.nn as nn
@@ -14,24 +23,25 @@ from sklearn.metrics import f1_score
 
 from control_wrapper import LiSeCoWrapper
 from actadd_wrapper import ActAddWrapper
-from fudge_wrapper import FudgeWrapper
-from instructions import *
+#from fudge_wrapper import FudgeWrapper
+#from instructions import *
 from data_util import encode_data
+from config import YOUR_PATH, YOUR_TOKEN
 
 random.seed(42)
 
 parser = argparse.ArgumentParser(description='training proof-of-concept')
 
 # Data selection
-parser.add_argument('--experiment', type=str, default='toxicity')
-parser.add_argument('--model_name', type=str, default="meta-llama/Llama-2-7b-hf")
+parser.add_argument('--experiment', type=str, default='elix')
+parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3-8B")
 parser.add_argument('--method', default='baseline', choices=['baseline', 'ours', 'actadd', 'instruct', 'fudge'])
 parser.add_argument('--layers', metavar='N', type=int, nargs='+',
                         help='an integer or a list of integers')
 parser.add_argument('--device', type=str, default='cuda')
-parser.add_argument('--liseco_lower', type=float, default=0.0)
-parser.add_argument('--liseco_upper', type=float, default=0.3)
-parser.add_argument('--liseco_map', default='sigmoid', choices=['sigmoid', 'tanh', 'identity'])
+parser.add_argument('--liseco_lower', type=float, default=0.7)
+parser.add_argument('--liseco_upper', type=float, default=1)
+parser.add_argument('--liseco_map', default='identity', choices=['sigmoid', 'tanh', 'identity'])
 parser.add_argument('--c', help="Actadd intervention strength", type=float, default=3)
 parser.add_argument('--l', default=6, type=int)
 parser.add_argument('--s', default=None, type=float)
@@ -40,13 +50,14 @@ args = parser.parse_args()
 
 exp = 'sentiment' if args.experiment in ('formality', 'sentiment') else 'toxicity' # reuse the sentiment prompts for formlaity
 
-with open(args.config, 'r') as f:
-    CONFIG = json.load(f)
+#with open(args.config, 'r') as f:
+#    CONFIG = json.load(f)
 
-ACCESS_TOKEN = CONFIG['hf_access_token']
-YOUR_PATH = CONFIG['path']
+#ACCESS_TOKEN = CONFIG['hf_access_token']
+#YOUR_PATH = CONFIG['path']
+ACCESS_TOKEN = YOUR_TOKEN
 
-args.dataset_name = f'{YOUR_PATH}/experiments/test_{exp}.csv' # last minute switch
+#args.dataset_name = f'{YOUR_PATH}/experiments/test_{exp}.csv' # last minute switch
 
 
 # Load the model and tokenizer
@@ -68,20 +79,45 @@ model.eval()
 # pdb.set_trace()
 
 # Load all linear probes
-num_layers = model.config.num_hidden_layers
+def load_probes(model, args):
+    """Load all linear probes for the model."""
+    num_layers = model.config.num_hidden_layers
+    Ws = []
+    
+    for layer in range(1, num_layers + 1):
+        probe_path = os.path.join(
+            YOUR_PATH,
+            'experiments/elix/saved_probes',
+            f'{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}_rs42.pt'
+        )
+        
+        print(f"Looking for probe at: {probe_path}")
+        try:
+            W = torch.load(probe_path).to(args.device)
+            Ws.append(W)
+            W.eval()
+        except Exception as e:
+            print(f"Error loading probe: {e}")
+    
+    return Ws
 
-Ws = [
-    torch.load(
-        f'{YOUR_PATH}/experiments/{args.experiment}/saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}{"_rs43" if args.experiment in ("formality", "sentiment") else ""}.pt'
-        ).to(args.device)
-    for layer in range(1, num_layers+1)
-]
-[W.eval() for W in Ws]
-
-# Load the dataset
-dataset = pd.read_csv(args.dataset_name)
+# Load probes
+Ws = load_probes(model, args)
+    
+# Get layer list based on model type
+layerlist = model.gpt_neox.layers if 'pythia' in args.model_name else model.model.layers
+    
+# Load dataset
+test_dataset = load_dataset("Asap7772/elix_generations_gpt4omini_pref")
+dataset = pd.DataFrame(test_dataset['test'])
 text_field = 'prompt'
-data = list(dataset[text_field])
+
+# Drop duplicates and format as question-answer pairs
+dataset = dataset.drop_duplicates(subset=[text_field])
+data = [f"Question: {text}\nAnswer: " for text in dataset[text_field]]
+
+# Initialize results dictionary
+results_dict = {}
 
 if args.method == 'instruct':
     data = transform_dataset(data, args.experiment, 0, S=args.s)
@@ -120,6 +156,7 @@ if args.method == 'fudge':
 
 def retrofit_model(Ws):
     # Wrap all of the layers of the model
+    num_layers = model.config.num_hidden_layers  # Get num_layers from model config
     for layer in range(num_layers):
         if type(layerlist[layer]) != LiSeCoWrapper:
             layerlist[layer] = LiSeCoWrapper(
@@ -138,10 +175,7 @@ def retrofit_model(Ws):
                 map_to_target_space=args.liseco_map
             )
 
-
 retrofit_model(Ws)
-
-results_dict = {}
 
 for i, datum in tqdm(enumerate(data)):
     encoding = encode_data(tokenizer, 1, [datum], 1, model.config.max_position_embeddings, args.device)[0]
@@ -149,6 +183,7 @@ for i, datum in tqdm(enumerate(data)):
     results_dict[datum] = {}
     retrofit_model(Ws)
 
+    num_layers = model.config.num_hidden_layers  # Get num_layers for the loops
     for layer in range(num_layers):
         results_dict[data[i]][layer] =  {}
 
@@ -190,6 +225,8 @@ for i, datum in tqdm(enumerate(data)):
     results_dict[data[i]]['token'] = generated_tokens_text
     results_dict[data[i]]['surprisal'] = surprisals
 
+    print(results_dict[data[i]]['generated_text'] )
+
     # Semantic scores log:
     for layer in range(num_layers):
         pre_adjust_scores = [float(score.item()) for score in layerlist[layer].pre_adjust_toxicity_log.copy()]
@@ -205,6 +242,24 @@ if args.method == 'actadd':
 if args.method == 'fudge':
     results_dict['overall_latency'] = lm_head.latency
 
+    # Convert tensor logs to float values before saving
+    for datum in results_dict:
+        if isinstance(results_dict[datum], dict):  # Skip non-dict entries like 'overall_latency'
+            for layer in range(num_layers):
+                if layer in results_dict[datum]:
+                    pre_scores = results_dict[datum][layer].get('pre_adjust_toxicity_prob', [])
+                    post_scores = results_dict[datum][layer].get('post_adjust_toxicity_prob', [])
+                    
+                    # Convert tensors to float values
+                    if pre_scores:
+                        results_dict[datum][layer]['pre_adjust_toxicity_prob'] = [float(score.cpu().item()) for score in pre_scores]
+                    if post_scores:
+                        results_dict[datum][layer]['post_adjust_toxicity_prob'] = [float(score.cpu().item()) for score in post_scores]
 
-with open(f'{YOUR_PATH}/experiments/{args.experiment}/control_results/{args.model_name.split("/")[-1]}_p_{args.p}_{args.method}.json', 'w') as f:
+# Create output directory if it doesn't exist
+output_dir = f'{YOUR_PATH}/experiments/{args.experiment}/control_results'
+os.makedirs(output_dir, exist_ok=True)
+print(f"Created output directory: {output_dir}")
+
+with open(f'{output_dir}/{args.model_name.split("/")[-1]}_{args.method}.json', 'w') as f:
     json.dump(results_dict, f)

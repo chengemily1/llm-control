@@ -1,20 +1,26 @@
-import argparse
 import torch 
 import torch.nn as nn
+import numpy as np
+import time
+import pdb
+from typing import Optional, List, Dict, Any, Tuple, Union
+import math
+import torch.nn.functional as F
+from transformers.models.llama.modeling_llama import LlamaDecoderLayer, LlamaRMSNorm, LlamaRotaryEmbedding, apply_rotary_pos_emb
+from transformers.models.mistral.modeling_mistral import MistralDecoderLayer
+#from transformers.models.olmo.modeling_olmo import OLMoDecoderLayer
+from transformers.models.phi.modeling_phi import PhiDecoderLayer
+from transformers.models.gemma.modeling_gemma import GemmaDecoderLayer
+from transformers.models.mixtral.modeling_mixtral import MixtralDecoderLayer
+from transformers.models.qwen2.modeling_qwen2 import Qwen2DecoderLayer
 
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from datasets import load_dataset
+from data_util import encode_data  # Changed from src.data_util to just data_util
 import json
 import pandas as pd
-import numpy as np
 from tqdm import tqdm
-import pdb
 import random
 from sklearn.metrics import f1_score 
-from scipy import optimize  
-import time
-from typing import Optional
-from src.data_util import encode_data
+from scipy import optimize
 
 
 # Different strictly monotone functions 
@@ -44,7 +50,7 @@ class LiSeCoBaseWrapper(torch.nn.Module):
         self.device = device
         
         # Probe-related parameters
-        self.probe = linear_probe.eval().half()
+        self.probe = linear_probe.eval().half().to(device)
         self.w = linear_probe.weight.detach().cpu().numpy().squeeze() # linear probe
         self.B = linear_probe.bias.detach().cpu().numpy().squeeze()
         self.w_norm = np.linalg.norm(self.w) # python float
@@ -122,9 +128,16 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
 
 
     def eval_probe(self, x_seq, last_token_idx):
-        eval_result = self.probe(x_seq[torch.arange(x_seq.size(0)),last_token_idx])
-
-        return self.forward_map(eval_result.squeeze()).detach().cpu().numpy().item() # this is the score in target space
+        # Get the last token representation
+        last_token_rep = x_seq[torch.arange(x_seq.size(0)), last_token_idx]
+        
+        # Ensure probe is on the same device as input
+        if self.probe.weight.device != last_token_rep.device:
+            self.probe = self.probe.to(last_token_rep.device)
+            
+        eval_result = self.probe(last_token_rep)
+        # Keep as tensor until needed
+        return self.forward_map(eval_result.squeeze()).detach()  # Return tensor instead of converting to numpy
 
     def forward(self, x, *args, **kwargs):
         t = time.time()
@@ -136,15 +149,21 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
         else:
             last_token_idx = x_seq.size(1) - 1
             
+        # Store the tensor result
         self.pre_adjust_toxicity_log.append(self.eval_probe(x_seq, last_token_idx))
         
         if self.control: # Make the adjustment
-            x_seq[torch.arange(x_seq.size(0)),last_token_idx] += self.optimal_theta(
-                x_seq[torch.arange(x_seq.size(0)),last_token_idx] # get last token rep
-            )
+            # Get last token representation
+            last_token_rep = x_seq[torch.arange(x_seq.size(0)), last_token_idx]
+            # Get optimal theta and ensure it's on the same device
+            theta = self.optimal_theta(last_token_rep)
+            if theta.device != x_seq.device:
+                theta = theta.to(x_seq.device)
+            # Apply the adjustment
+            x_seq[torch.arange(x_seq.size(0)), last_token_idx] += theta
 
         # Add to toxicity log
-        self.post_adjust_toxicity_log.append(self.eval_probe(x_seq, last_token_idx)) # this is the probscore
+        self.post_adjust_toxicity_log.append(self.eval_probe(x_seq, last_token_idx))
         self.latency.append(time.time() - t)
         return x_seq, x_metadata
 
@@ -157,7 +176,7 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
         Returns:
             _type_: _description_
         """
-        theta = torch.zeros(x.shape) # batch size x d
+        theta = torch.zeros(x.shape, device=self.device, dtype=torch.float16)  # Create with half precision
         x = x.detach().cpu().numpy()
 
         # Classified as toxic when w.T x < a or w.T x > b.
@@ -168,23 +187,29 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
 
         # No intervention needed case
         if not len(toxic_sequences_idx_upper[0]) and not len(toxic_sequences_idx_lower[0]): 
-            return theta.to(self.device)
+            return theta
 
         # intervention needed
-        # print(f"Sequence is toxic at token {len(self.pre_adjust_toxicity_log)}")
-
         x_toxic_upper = x[toxic_sequences_idx_upper] # index into the toxic ones only
         x_toxic_lower = x[toxic_sequences_idx_lower]
 
         # Upper intervention needed
         if len(x_toxic_upper):
-            theta[toxic_sequences_idx_upper] = torch.FloatTensor(self.w * (self.b - (self.w @ x_toxic_upper.T + self.B)) / self.w_norm**2)
+            theta[toxic_sequences_idx_upper] = torch.tensor(
+                self.w * (self.b - (self.w @ x_toxic_upper.T + self.B)) / self.w_norm**2,
+                device=self.device,
+                dtype=torch.float16
+            )
         
         # Lower intervention needed
         if len(x_toxic_lower):
-            theta[toxic_sequences_idx_lower] = torch.FloatTensor(self.w * (self.a - (self.w @ x_toxic_lower.T + self.B)) / self.w_norm**2)
+            theta[toxic_sequences_idx_lower] = torch.tensor(
+                self.w * (self.a - (self.w @ x_toxic_lower.T + self.B)) / self.w_norm**2,
+                device=self.device,
+                dtype=torch.float16
+            )
 
-        return theta.to(self.device)        
+        return theta
 
     def reset_logs(self):
         self.toxic_sequences = []
