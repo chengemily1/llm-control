@@ -2,8 +2,6 @@
 
 import pandas as pd
 from datasets import load_dataset
-import numpy as np
-from collections import defaultdict
 
 def process_elix_dataset(user, dataset_path):
     """Process the Elix dataset for a specific user level."""
@@ -34,88 +32,34 @@ def process_elix_dataset(user, dataset_path):
     save_processed_dataset(reorganized_df, dataset_path)
     return reorganized_df
 
-def fit_bradley_terry(df, max_iter=100, tol=1e-8):
-    """Fit Bradley-Terry model to pairwise comparison data.
-    
-    Args:
-        df: DataFrame with columns level_id_x, level_id_y, and label
-        max_iter: Maximum number of iterations for MLE
-        tol: Convergence tolerance
-        
-    Returns:
-        dict: Mapping from level_id to strength parameter
-    """
-    # Get unique levels
-    levels = set(df['level_id_x'].unique()) | set(df['level_id_y'].unique())
-    n_levels = len(levels)
-    level_to_idx = {level: idx for idx, level in enumerate(sorted(levels))}
-    
-    # Initialize win matrix
-    W = np.zeros((n_levels, n_levels))
-    N = np.zeros((n_levels, n_levels))
-    
-    # Fill matrices
-    for _, row in df.iterrows():
-        i, j = level_to_idx[row['level_id_x']], level_to_idx[row['level_id_y']]
-        if row['label'] == 0:  # x preferred
-            W[i, j] += 1
-        else:  # y preferred
-            W[j, i] += 1
-        N[i, j] += 1
-        N[j, i] += 1
-    
-    # Initialize strength parameters
-    gamma = np.ones(n_levels) / n_levels
-    
-    # Iterative algorithm for MLE
-    for _ in range(max_iter):
-        gamma_old = gamma.copy()
-        
-        # Update each gamma[i]
-        for i in range(n_levels):
-            # Skip if no comparisons
-            if np.sum(N[i, :]) == 0:
-                continue
-                
-            # Calculate numerator (total wins)
-            numerator = np.sum(W[i, :])
-            
-            # Calculate denominator
-            denominator = 0
-            for j in range(n_levels):
-                if i != j and N[i, j] > 0:
-                    denominator += N[i, j] * gamma[j] / (gamma[i] + gamma[j])
-            
-            # Update gamma[i]
-            if denominator > 0:
-                gamma[i] = numerator / denominator
-        
-        # Normalize to prevent numerical issues
-        gamma = gamma / np.sum(gamma)
-        
-        # Check convergence
-        if np.max(np.abs(gamma - gamma_old)) < tol:
-            break
-    
-    # Convert back to probabilities and create mapping
-    probs = gamma / np.sum(gamma)
-    return {level: float(probs[idx]) for level, idx in level_to_idx.items()}
-
 def calculate_level_scores(df):
-    """Calculate scores for each level using Bradley-Terry model."""
-    # Fit Bradley-Terry model
-    level_scores = fit_bradley_terry(df)
+    """Calculate normalized scores for each level based on preferences."""
+    # Initialize scores for each level
+    level_scores = {}
     
-    # Print comparison of scores
-    print("\nBradley-Terry model scores:")
-    for level, score in sorted(level_scores.items()):
-        print(f"Level {level}: {score:.3f}")
+    # Count wins for each level
+    for _, row in df.iterrows():
+        if row['label'] == 0:  # response_x preferred
+            level_scores[row['level_id_x']] = level_scores.get(row['level_id_x'], 0) + 1
+        else:  # response_y preferred
+            level_scores[row['level_id_y']] = level_scores.get(row['level_id_y'], 0) + 1
     
-    return level_scores
+    # Normalize scores by number of comparisons
+    level_counts = {}
+    for _, row in df.iterrows():
+        level_counts[row['level_id_x']] = level_counts.get(row['level_id_x'], 0) + 1
+        level_counts[row['level_id_y']] = level_counts.get(row['level_id_y'], 0) + 1
+    
+    normalized_scores = {
+        level: score / level_counts[level] 
+        for level, score in level_scores.items()
+    }
+    
+    return normalized_scores
 
 def print_level_scores(level_scores):
-    """Print the scores for each level."""
-    print("\nLevel scores from Bradley-Terry model:")
+    """Print the normalized scores for each level."""
+    print("\nLevel scores (normalized by number of comparisons):")
     for level, score in sorted(level_scores.items()):
         print(f"Level {level}: {score:.3f}")
 
