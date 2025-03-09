@@ -34,10 +34,14 @@ def parse_arguments():
                        help='Override default device')
     parser.add_argument('--batch_size', type=int,
                        help='Override default batch size')
+    parser.add_argument('--random_seed', type=int,
+                       help='Override default random seed')
     
     # Other arguments
     parser.add_argument('--attn', type=int, default=0,
                        help='Whether to save attention representations')
+    parser.add_argument('--data_fraction', type=float, default=0.1,
+                       help='Fraction of data to use (default: 0.1)')
     parser.add_argument('--user', default='child',
                        choices=['child', 'preteen', 'teenager', 'young adult', 'expert'],
                        help='User type for elix experiment')
@@ -63,7 +67,7 @@ def main():
     
     # Process dataset if needed
     if not os.path.exists(paths['data']['processed']):
-        process_elix_dataset(args.user, paths['data']['processed'])
+        process_elix_dataset(args.user, paths['data']['processed'], exp_config, data_fraction=args.data_fraction)
     
     # Load processed dataset
     dataset = pd.read_csv(paths['data']['processed'])

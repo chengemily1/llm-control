@@ -1,0 +1,10 @@
+annotators:
+  - type: pairwise_evaluator
+    name: custom_evaluator
+    prompt_template: eval_prompt.txt
+    model_name: gpt-4-turbo-preview
+    user_description: 'Please evaluate which one of the responses would be preferred by the user.'
+    output:
+      type: single_char
+      valid_outputs: ['m', 'M']
+    temperature: 0.0

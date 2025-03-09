@@ -128,10 +128,15 @@ def main():
             outputs = model.generate(
                 inputs=encoding['input_ids'],
                 min_new_tokens=1,
-                max_new_tokens=50,
+                max_new_tokens=100,
                 do_sample=False,
+                temperature=1.0,
+                top_p=1.0,
+                repetition_penalty=1.0,
                 return_dict_in_generate=True,
-                output_scores=True
+                output_scores=True,
+                pad_token_id=tokenizer.pad_token_id,
+                eos_token_id=tokenizer.eos_token_id
             )
             
             # Process generation output

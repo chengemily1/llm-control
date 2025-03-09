@@ -23,10 +23,18 @@ class ExperimentConfig:
     text_field: str = "prompt_response"  # Field to use from dataset
     label_field: str = "score"  # Field to use as labels
     
+    # User settings
+    user: str = "child"  # User type for elix experiment
+    
     def __post_init__(self):
         """Validate and set derived attributes."""
         if self.experiment not in ["elix"]:
             raise ValueError(f"Unknown experiment type: {self.experiment}")
+        
+        # Validate user type
+        valid_users = ["child", "preteen", "teenager", "young adult", "expert"]
+        if self.user not in valid_users:
+            raise ValueError(f"Invalid user type: {self.user}. Must be one of {valid_users}")
         
         # Set text field based on experiment
         if self.experiment != "elix":
@@ -34,7 +42,7 @@ class ExperimentConfig:
     
     def get_paths(self, base_path: str) -> dict:
         """Get all relevant paths for the experiment."""
-        exp_dir = os.path.join(base_path, "experiments", self.experiment)
+        exp_dir = os.path.join(base_path, "experiments", self.experiment, self.user)
         
         return {
             "data": {
