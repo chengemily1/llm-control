@@ -1,4 +1,5 @@
 name: llm-control
+prefix: /scratch/llm-control/.pyenv
 channels:
   - pytorch
   - nvidia
@@ -250,4 +251,3 @@ dependencies:
       - widgetsnbextension==4.0.10
       - xxhash==3.4.1
       - yarl==1.9.4
-prefix: /home/echeng/miniconda3/envs/control

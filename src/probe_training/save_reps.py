@@ -113,4 +113,5 @@ def main():
         )
 
 if __name__ == "__main__":
+    # Use: python src/probe_training/save_reps.py --data_fraction 0.1 --user child
     main()
