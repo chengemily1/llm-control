@@ -45,7 +45,7 @@ def parse_arguments():
     parser.add_argument('--s', default=None, type=float)
     parser.add_argument('--r2_threshold', type=float, default=0,
                        help='R² threshold for automatic layer selection')
-    parser.add_argument('--config', default='src/config.json', help='path to config file')
+    parser.add_argument('--config', default='/scratch/llm-control/src/config.json', help='path to config file')
     return parser.parse_args()
 
 def main():
@@ -66,8 +66,8 @@ def main():
         print("\nNo layers specified, selecting layers based on R² scores...")
         selected_layers = get_layers_by_r2(args.model_name, config['base_path'], args.r2_threshold)
         if not selected_layers:
-            print("No layers found with sufficient R² scores. Please specify layers manually.")
-            return
+            print("No layers found with sufficient R² scores. Using all layers.")
+            selected_layers = list(range(model.config.num_hidden_layers))
     else:
         selected_layers = args.layers
         print(f"\nUsing manually specified layers: {selected_layers}")
@@ -89,6 +89,7 @@ def main():
     
     # Load probes and get layer list
     Ws = load_probes(model, args, config['base_path'])
+
     layerlist = get_layer_list(model, args.model_name)
     
     # Load and process dataset
@@ -156,7 +157,8 @@ def main():
     
     # Save results
     output_path = f'{config["base_path"]}/experiments/{args.experiment}/control_results/{args.model_name.split("/")[-1]}_{args.method}.json'
-    #save_results(results_dict, output_path)
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    save_results(results_dict, output_path)
 
 if __name__ == "__main__":
     main()

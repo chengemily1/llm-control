@@ -60,12 +60,36 @@ def get_train_val_split(representations, labels, split_percent=0.8, device='cuda
     return train_features, train_labels, val_features, val_labels
 
 def train_probe(model, train_features, train_labels, val_features, val_labels, 
-                num_epochs=1000, learning_rate=0.0001, device='cuda'):
-    """Train a probe model and track metrics."""
+                num_epochs=1000, learning_rate=0.0001, device='cuda', 
+                patience=50, early_stopping_metric='val_mse', min_delta=0.0001):
+    """Train a probe model and track metrics.
+    
+    Args:
+        model: The probe model to train
+        train_features: Training features
+        train_labels: Training labels
+        val_features: Validation features
+        val_labels: Validation labels
+        num_epochs: Maximum number of epochs to train for
+        learning_rate: Learning rate for optimizer
+        device: Device to train on ('cuda' or 'cpu')
+        patience: Number of epochs to wait for improvement before stopping
+        early_stopping_metric: Metric to monitor for early stopping ('val_mse', 'val_mae', or 'val_r2')
+        min_delta: Minimum change in monitored metric to qualify as improvement
+        
+    Returns:
+        Tuple of (best_model, metrics)
+    """
     # Setup training
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     metrics = {'val_mse': [], 'val_mae': [], 'val_r2': [], 'val_epoch': []}
+    
+    # Early stopping setup
+    best_metric_value = float('inf') if early_stopping_metric != 'val_r2' else float('-inf')
+    best_epoch = 0
+    best_model_state = None
+    counter = 0
     
     # Training loop
     for epoch in range(num_epochs):
@@ -95,38 +119,73 @@ def train_probe(model, train_features, train_labels, val_features, val_labels,
         metrics['val_r2'].append(float(r2))
         metrics['val_epoch'].append(epoch)
         
-        if (epoch + 1) % 100 == 0:
+        # Get current metric value for early stopping
+        if early_stopping_metric == 'val_mse':
+            current_metric = mse
+        elif early_stopping_metric == 'val_mae':
+            current_metric = mae
+        elif early_stopping_metric == 'val_r2':
+            current_metric = r2
+        else:
+            raise ValueError(f"Unknown early stopping metric: {early_stopping_metric}")
+        
+        # Check if this is the best model so far
+        improved = False
+        if early_stopping_metric == 'val_r2':  # For R², higher is better
+            if current_metric > best_metric_value + min_delta:
+                improved = True
+        else:  # For MSE and MAE, lower is better
+            if current_metric < best_metric_value - min_delta:
+                improved = True
+                
+        if improved:
+            best_metric_value = current_metric
+            best_epoch = epoch
+            best_model_state = model.state_dict().copy()
+            counter = 0
+        else:
+            counter += 1
+        
+        # Print progress
+        if (epoch + 1) % 100 == 0 or counter == patience:
             print(f'Epoch {epoch+1}/{num_epochs}, Validation Loss: {val_loss:.4f}, '
                   f'MSE: {mse:.4f}, MAE: {mae:.4f}, R²: {r2:.4f}')
+            if counter > 0:
+                print(f'Early stopping counter: {counter}/{patience}')
+        
+        # Check early stopping condition
+        if counter >= patience:
+            print(f'Early stopping triggered after {epoch+1} epochs. Best epoch was {best_epoch+1}.')
+            break
+    
+    # Restore best model
+    if best_model_state is not None:
+        model.load_state_dict(best_model_state)
+        print(f'Restored model from best epoch ({best_epoch+1})')
+    
+    # Add best epoch to metrics
+    metrics['best_epoch'] = best_epoch
     
     return model, metrics
 
-def save_probe_results(metrics, model, config, output_dir):
+def save_probe_results(metrics, model, save_name, probes_dir, results_dir, save=True):
     """Save probe training results and model."""
     # Create output directories
-    results_dir = os.path.join(output_dir, 'probing_results')
-    probes_dir = os.path.join(output_dir, 'saved_probes')
     os.makedirs(results_dir, exist_ok=True)
     os.makedirs(probes_dir, exist_ok=True)
-    
-    # Generate file name components
-    model_name = config['model_name'].split('/')[-1]
-    layer_str = f"layer_{config['layer']}"
-    rs_str = f"rs{config['random_seed']}"
-    ds_str = f"_downsample_{config['downsample']}" if config['downsample'] < 1 else ""
     
     # Save metrics
     metrics_file = os.path.join(
         results_dir, 
-        f"{model_name}_{layer_str}_{rs_str}{ds_str}_validation_results_over_training.json"
+        f"{save_name}_validation_results_over_training.json"
     )
     with open(metrics_file, 'w') as f:
         json.dump(metrics, f)
     
     # Save model if requested
-    if config['save']:
+    if save:
         model_file = os.path.join(
             probes_dir,
-            f"{model_name}_linear_probe_{layer_str}_{rs_str}{ds_str}.pt"
+            f"{save_name}_linear_probe.pt"
         )
         torch.save(model, model_file) 

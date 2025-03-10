@@ -46,7 +46,6 @@ if __name__ == "__main__":
     print("\nFirst few entries:")
     print(df.head())
     
-    breakpoint()
     # Save to CSV if requested
     if args.output_csv:
         df.to_csv(args.output_csv, index=False)

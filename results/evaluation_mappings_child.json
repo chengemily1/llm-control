@@ -1,27 +1,27 @@
 {
   "q0": {
+    "m": "controlled",
+    "M": "baseline"
+  },
+  "q1": {
     "m": "baseline",
     "M": "controlled"
   },
-  "q1": {
-    "m": "controlled",
-    "M": "baseline"
-  },
   "q2": {
-    "m": "controlled",
-    "M": "baseline"
+    "m": "baseline",
+    "M": "controlled"
   },
   "q3": {
     "m": "controlled",
     "M": "baseline"
   },
   "q4": {
-    "m": "baseline",
-    "M": "controlled"
-  },
-  "q5": {
     "m": "controlled",
     "M": "baseline"
+  },
+  "q5": {
+    "m": "baseline",
+    "M": "controlled"
   },
   "q6": {
     "m": "controlled",
@@ -32,8 +32,8 @@
     "M": "baseline"
   },
   "q8": {
-    "m": "baseline",
-    "M": "controlled"
+    "m": "controlled",
+    "M": "baseline"
   },
   "q9": {
     "m": "controlled",
@@ -44,16 +44,16 @@
     "M": "baseline"
   },
   "q11": {
-    "m": "controlled",
-    "M": "baseline"
+    "m": "baseline",
+    "M": "controlled"
   },
   "q12": {
     "m": "controlled",
     "M": "baseline"
   },
   "q13": {
-    "m": "baseline",
-    "M": "controlled"
+    "m": "controlled",
+    "M": "baseline"
   },
   "q14": {
     "m": "controlled",
@@ -76,11 +76,11 @@
     "M": "controlled"
   },
   "q19": {
-    "m": "controlled",
-    "M": "baseline"
-  },
-  "q20": {
     "m": "baseline",
     "M": "controlled"
+  },
+  "q20": {
+    "m": "controlled",
+    "M": "baseline"
   }
 }

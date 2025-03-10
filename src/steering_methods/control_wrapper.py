@@ -22,6 +22,7 @@ import random
 from sklearn.metrics import f1_score 
 from scipy import optimize
 from src.utils.config_utils import load_config
+from src.utils.probe_utils import LinearProbe
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
@@ -53,8 +54,8 @@ class LiSeCoBaseWrapper(torch.nn.Module):
         
         # Probe-related parameters
         self.probe = linear_probe.eval().half().to(device)
-        self.w = linear_probe.weight.detach().cpu().numpy().squeeze() # linear probe
-        self.B = linear_probe.bias.detach().cpu().numpy().squeeze()
+        self.w = linear_probe.linear.weight.detach().cpu().numpy().squeeze() # linear probe
+        self.B = linear_probe.linear.bias.detach().cpu().numpy().squeeze()
         self.w_norm = np.linalg.norm(self.w) # python float
 
         # Logging
@@ -83,7 +84,7 @@ class LiSeCoBaseWrapper(torch.nn.Module):
 # Linear control wrapper class
 class LiSeCoWrapper(LiSeCoBaseWrapper):
     def __init__(self, base_layer: nn.Module, 
-                 linear_probe: nn.Module, 
+                 linear_probe: LinearProbe, 
                  lower: float, 
                  upper: float, 
                  map_to_target_space: str, 
@@ -134,7 +135,7 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
         last_token_rep = x_seq[torch.arange(x_seq.size(0)), last_token_idx]
         
         # Ensure probe is on the same device as input
-        if self.probe.weight.device != last_token_rep.device:
+        if self.probe.linear.weight.device != last_token_rep.device:
             self.probe = self.probe.to(last_token_rep.device)
             
         eval_result = self.probe(last_token_rep)

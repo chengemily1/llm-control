@@ -65,10 +65,14 @@ if __name__ == "__main__":
                       help='User type (e.g., child, preteen, teenager, young adult, expert)')
     parser.add_argument('--seed', type=int, default=42,
                       help='Random seed for reproducibility')
+    parser.add_argument('--path_baseline', type=str, default=None,
+                      help='Path to baseline CSV file')
+    parser.add_argument('--path_controlled', type=str, default=None,
+                      help='Path to controlled CSV file')
     args = parser.parse_args()
     
-    baseline_csv = "/scr/biggest/carmen/llm-control/experiments/elix_old/control_results/Meta-Llama-3-8B_baseline.csv"
-    controlled_csv = "/scr/biggest/carmen/llm-control/experiments/elix_old/control_results/Meta-Llama-3-8B_ours.csv"
+    baseline_csv = args.path_baseline
+    controlled_csv = args.path_controlled
     output_dir = "results"
     
     convert_csv_to_json(baseline_csv, controlled_csv, output_dir, args.user, args.seed) 

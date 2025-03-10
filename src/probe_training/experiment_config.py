@@ -53,7 +53,7 @@ class ExperimentConfig:
                 "base": os.path.join(exp_dir, "saved_reps"),
                 "layer": lambda layer: os.path.join(
                     exp_dir, "saved_reps",
-                    f"{self.model_name.split('/')[-1]}_reps_final.pt"
+                    f"{self.model_name.split('/')[-1]}_reps_part_final.pt"
                 ),
             },
             "probes": {

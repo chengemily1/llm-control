@@ -40,8 +40,8 @@ def load_probes(model, args, your_path):
     for layer in range(1, num_layers + 1):
         probe_path = os.path.join(
             your_path,
-            'experiments/elix/saved_probes',
-            f'{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}_rs42.pt'
+            'experiments/elix/child/saved_probes', # TODO JL 3/10/25: add user
+            f'{args.model_name.split("/")[-1]}_layer_{layer}_rsNone_linear_probe.pt' # TODO JL 3/10/25: add random seed
         )
         
         print(f"Looking for probe at: {probe_path}")

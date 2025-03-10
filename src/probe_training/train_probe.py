@@ -44,7 +44,7 @@ def parse_arguments():
     # Other arguments
     parser.add_argument('--save', type=int, choices=[0,1], default=0,
                        help='Whether to save the probe')
-    parser.add_argument('--config', default='src/config.json',
+    parser.add_argument('--config', default='/scratch/llm-control/src/config.json',
                        help='Path to config file')
     
     return parser.parse_args()
@@ -78,7 +78,12 @@ def main():
     dataset = pd.read_csv(paths['data']['processed'])
     
     # Load representations
-    representations = torch.load(paths['representations']['layer'](args.layer))[args.layer]
+    # If layer > num_layers, pass
+    try:
+        representations = torch.load(paths['representations']['layer'](args.layer))[args.layer]
+    except IndexError:
+        print(f"Layer {args.layer} not found in representations. Exiting.")
+        return
     
     # Get labels
     labels = list(dataset[exp_config.label_field])[:len(representations)]
@@ -108,13 +113,19 @@ def main():
     
     # Save results if requested
     if args.save:
+        model_name = exp_config.model_name.split('/')[-1]
+        layer_str = f"layer_{args.layer}"
+        rs_str = f"rs{args.random_seed}"
+        ds_str = f"_downsample_{args.downsample}" if (args.downsample and args.downsample < 1) else ""
+        save_name = f"{model_name}_{layer_str}_{rs_str}{ds_str}"
+
         save_probe_results(
             metrics=metrics,
             model=model,
-            probe_name=exp_config.get_probe_name(args.layer),
-            results_name=exp_config.get_results_name(args.layer),
+            save_name=save_name,
             probes_dir=paths['probes']['base'],
-            results_dir=paths['probes']['results']
+            results_dir=paths['probes']['results'],
+            save=args.save
         )
 
 if __name__ == "__main__":

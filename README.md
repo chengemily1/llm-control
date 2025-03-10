@@ -18,3 +18,24 @@ This is a repo in-progress for Linear Semantic Control (LiSeCo). The pipeline co
 
 ## Notes
 Code relies on having a HuggingFace access token that you should fill in yourself. Otherwise, should work out of the box.
+
+
+```
+# Save representations
+python src/probe_training/save_reps.py --data_fraction 0.1 --user child
+
+# Train probes
+cd src/probe_training
+bash train_probe.sh
+
+# Run control
+cd ../..
+python main.py --method baseline
+python main.py --method liseco
+
+# LLM as judge
+python save_gens_to_csv.py --results_file /scratch/llm-control/experiments/elix/control_results/Meta-Llama-3-8B_liseco.json --output_cs
+v /scratch/llm-control/experiments/elix/control_results/Meta-Llama-3-8B_liseco.csv
+python convert_to_json.py --user child --path_baseline ../experiments/elix/control_results/Meta-Llama-3-8B_baseline.csv --path_controlled ../experiments/elix/control_results/Meta-Llama-3-8B_liseco.csv
+python results/llm_as_judge.py --user child
+```

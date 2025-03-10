@@ -15,7 +15,8 @@ if project_root not in sys.path:
 from src.utils.model_utils import setup_model_and_tokenizer
 from src.utils.data_utils import encode_data
 from src.utils.config_utils import load_config
-from src.utils.dataset_utils import process_elix_dataset
+# from src.utils.dataset_utils import process_elix_dataset
+from src.utils.dataset_utils_030625 import process_elix_dataset
 from src.utils.representation_utils import (
     save_layer_representations,
     save_attention_representations
