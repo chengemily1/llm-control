@@ -33,9 +33,9 @@ from src.steering_methods.model_wrapper import (
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description='training proof-of-concept')
-    parser.add_argument('--experiment', type=str, default='elix')
+    parser.add_argument('--experiment', type=str, default='gms8k')
     parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3-8B")
-    parser.add_argument('--method', default='liseco', choices=['baseline', 'liseco', 'instruct'])
+    parser.add_argument('--method', default='liseco', choices=['baseline', 'liseco'])
     parser.add_argument('--layers', metavar='N', type=int, nargs='+', 
                        help='an integer or a list of integers (if not provided, will use layers with R² > 0.5)')
     parser.add_argument('--device', type=str, default='cuda')

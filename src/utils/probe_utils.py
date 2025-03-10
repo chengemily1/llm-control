@@ -9,95 +9,109 @@ import json
 from tqdm import tqdm
 
 class LinearProbe(nn.Module):
-    """Simple linear probe model."""
-    def __init__(self, input_dim, output_dim=1):
+    """Linear probe that learns a hyperplane Wx-p=0."""
+    def __init__(self, input_dim, exp_config):
         super().__init__()
-        self.linear = nn.Linear(input_dim, output_dim)
+        self.linear = nn.Linear(input_dim, 1, bias=False)  # This is our W matrix
+        self.p = nn.Parameter(torch.randn(1))  # This is our learnable p value
     
     def forward(self, x):
-        return self.linear(x)
+        return torch.matmul(x, self.linear.weight.t()).squeeze(-1)  # Returns Wx
+    
+    def get_distance_to_hyperplane(self, x):
+        """Get the signed distance from points to the hyperplane Wx-p=0."""
+        Wx = self.forward(x)
+        return Wx - self.p  # Distance is Wx-p
 
-def get_train_val_split(representations, labels, split_percent=0.8, device='cuda'):
-    """Split representations into training and validation sets while ensuring balanced distribution of scores."""
-    # Create data dictionary with representations and their corresponding labels
-    data = dict(zip(representations, labels))
+def get_train_val_split(representations, split_percent=0.8, device='cuda'):
+    """Split representations into training and validation sets."""
+    n_samples = len(representations)
+    n_train = int(n_samples * split_percent)
     
-    # Group data by score value
-    score_groups = {}
-    for rep, score in data.items():
-        if score not in score_groups:
-            score_groups[score] = []
-        score_groups[score].append(rep)
+    # Randomly shuffle indices
+    indices = list(range(n_samples))
+    random.shuffle(indices)
     
-    # Initialize train and validation sets
-    train_features, train_labels = [], []
-    val_features, val_labels = [], []
+    # Split into train and validation sets
+    train_indices = indices[:n_train]
+    val_indices = indices[n_train:]
     
-    # For each score group, split into train and validation
-    for score, reps in score_groups.items():
-        n_samples = len(reps)
-        n_train = int(n_samples * split_percent)
-        
-        # Randomly sample from this score group
-        train_indices = set(random.sample(range(len(reps)), n_train))
-        val_indices = set(range(len(reps))) - train_indices
-        
-        # Split into train and validation sets
-        train_reps = [reps[i] for i in train_indices]
-        val_reps = [reps[i] for i in val_indices]
-        
-        train_features.extend(train_reps)
-        train_labels.extend([score] * len(train_reps))
-        val_features.extend(val_reps)
-        val_labels.extend([score] * len(val_reps))
+    # Split features
+    train_features = torch.stack([representations[i] for i in train_indices]).float().to(device)
+    val_features = torch.stack([representations[i] for i in val_indices]).float().to(device)
     
-    # Convert to tensors and move to device
-    train_features = torch.stack(train_features).float().to(device)
-    val_features = torch.stack(val_features).float().to(device)
-    train_labels = torch.tensor(train_labels, device=device)
-    val_labels = torch.tensor(val_labels, device=device)
-    
-    return train_features, train_labels, val_features, val_labels
+    return train_features, val_features
 
-def train_probe(model, train_features, train_labels, val_features, val_labels, 
-                num_epochs=1000, learning_rate=0.0001, device='cuda'):
-    """Train a probe model and track metrics."""
+def train_probe(model, train_features, val_features, num_epochs=1000, learning_rate=0.0001, device='cuda'):
+    """Train a probe model to learn a hyperplane Wx-p=0 that all points lie on."""
     # Setup training
-    criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    metrics = {'val_mse': [], 'val_mae': [], 'val_r2': [], 'val_epoch': []}
+    metrics = {'train_loss': [], 'val_loss': [], 'epoch': [], 'p_value': [], 'W_norm': [], 'W_stats': []}
     
     # Training loop
     for epoch in range(num_epochs):
         # Training phase
         model.train()
         optimizer.zero_grad()
-        outputs = model(train_features)
-        loss = criterion(outputs.squeeze(), train_labels.float())
+        
+        # Get distances to hyperplane
+        train_distances = model.get_distance_to_hyperplane(train_features)
+        
+        # Use higher power to more strictly enforce points lying on hyperplane
+        # Power of 4 will more heavily penalize points far from hyperplane
+        loss = torch.mean(train_distances ** 4)
+        
+        # Add L2 regularization on W to prevent degenerate solutions
+        W_norm = torch.norm(model.linear.weight)
+        loss = loss + 1e-4 * (W_norm - 1.0) ** 2  # Encourage W to have norm close to 1
+        
         loss.backward()
         optimizer.step()
         
         # Validation phase
         model.eval()
         with torch.no_grad():
-            outputs = model(val_features)
-            val_loss = criterion(outputs.squeeze(), val_labels.float())
-            predictions = outputs.squeeze()
-        
-        # Calculate metrics
-        mse = mean_squared_error(val_labels.cpu(), predictions.cpu())
-        mae = mean_absolute_error(val_labels.cpu(), predictions.cpu())
-        r2 = r2_score(val_labels.cpu(), predictions.cpu())
+            val_distances = model.get_distance_to_hyperplane(val_features)
+            val_loss = torch.mean(val_distances ** 4)
+            
+            # Get statistics about W
+            W = model.linear.weight
+            W_norm = torch.norm(W).item()
+            W_mean = torch.mean(W).item()
+            W_std = torch.std(W).item()
+            W_min = torch.min(W).item()
+            W_max = torch.max(W).item()
+            
+            # Count points that are "exactly" on hyperplane (within numerical precision)
+            exact_threshold = 1e-6
+            points_on_hyperplane = torch.sum(torch.abs(train_distances) < exact_threshold).item()
+            total_points = train_distances.shape[0]
+            percent_on_hyperplane = 100 * points_on_hyperplane / total_points
         
         # Store metrics
-        metrics['val_mse'].append(float(mse))
-        metrics['val_mae'].append(float(mae))
-        metrics['val_r2'].append(float(r2))
-        metrics['val_epoch'].append(epoch)
+        metrics['train_loss'].append(float(loss))
+        metrics['val_loss'].append(float(val_loss))
+        metrics['epoch'].append(epoch)
+        metrics['p_value'].append(float(model.p))
+        metrics['W_norm'].append(W_norm)
+        metrics['W_stats'].append({
+            'mean': W_mean,
+            'std': W_std,
+            'min': W_min,
+            'max': W_max
+        })
         
         if (epoch + 1) % 100 == 0:
-            print(f'Epoch {epoch+1}/{num_epochs}, Validation Loss: {val_loss:.4f}, '
-                  f'MSE: {mse:.4f}, MAE: {mae:.4f}, R²: {r2:.4f}')
+            mean_dist = torch.mean(train_distances)
+            max_dist = torch.max(torch.abs(train_distances))
+            std_dist = torch.std(train_distances)
+            print(f'Epoch {epoch+1}/{num_epochs}')
+            print(f'Loss: {loss:.8f}, Val Loss: {val_loss:.8f}')
+            print(f'Mean Distance: {mean_dist:.8f}, Max Abs Distance: {max_dist:.8f}')
+            print(f'Std Distance: {std_dist:.8f}, p: {model.p.item():.8f}')
+            print(f'W norm: {W_norm:.8f}')
+            print(f'W stats - mean: {W_mean:.8f}, std: {W_std:.8f}, min: {W_min:.8f}, max: {W_max:.8f}')
+            print(f'Points exactly on hyperplane: {points_on_hyperplane}/{total_points} ({percent_on_hyperplane:.2f}%)')
     
     return model, metrics
 
@@ -115,7 +129,9 @@ def save_probe_results(metrics, model, config, output_dir):
     rs_str = f"rs{config['random_seed']}"
     ds_str = f"_downsample_{config['downsample']}" if config['downsample'] < 1 else ""
     
-    # Save metrics
+    # Save metrics and final target vector
+    metrics['final_target_vector'] = model.linear.weight.detach().cpu().numpy().tolist()
+    
     metrics_file = os.path.join(
         results_dir, 
         f"{model_name}_{layer_str}_{rs_str}{ds_str}_validation_results_over_training.json"

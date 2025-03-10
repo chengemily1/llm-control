@@ -75,32 +75,26 @@ def main():
     device = 'cuda:0' if exp_config.device == 'cuda' and torch.cuda.is_available() else 'cpu'
     
     # Load dataset
-    dataset = pd.read_csv(paths['data']['processed'])
+    processed_file = os.path.join(paths['data']['processed'], 'processed_dataset.csv')
+    dataset = pd.read_csv(processed_file)
     
-    # Load representations
-    representations = torch.load(paths['representations']['layer'](args.layer))[args.layer]
-    
-    # Get labels
-    labels = list(dataset[exp_config.label_field])[:len(representations)]
+    # Load representations for the specified layer
+    model_name = exp_config.model_name.split('/')[-1]
+    layer_file = os.path.join(paths['representations']['base'], f"{model_name}_layer_{args.layer}_reps.pt")
+    representations = torch.load(layer_file)
     
     # Split data
-    train_features, train_labels, val_features, val_labels = get_train_val_split(
-        representations, labels, device=device
+    train_features, val_features = get_train_val_split(
+        representations, device=device
     )
-    
-    # Downsample if needed
-    if exp_config.downsample < 1:
-        train_size = int(len(train_features) * exp_config.downsample)
-        train_features = train_features[:train_size]
-        train_labels = train_labels[:train_size]
     
     # Initialize model
     input_dim = representations[0].shape[-1]
-    model = LinearProbe(input_dim=input_dim).to(device)
+    model = LinearProbe(input_dim=input_dim, exp_config=exp_config).to(device)
     
     # Train model
     model, metrics = train_probe(
-        model, train_features, train_labels, val_features, val_labels,
+        model, train_features, val_features,
         num_epochs=exp_config.num_epochs,
         learning_rate=exp_config.learning_rate,
         device=device

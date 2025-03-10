@@ -1,75 +1,49 @@
-"""Configuration management for probe training experiments."""
+"""Configuration class for probe training experiments."""
 
-import os
 from dataclasses import dataclass
-from typing import Optional
+from typing import Dict, Any, Optional
 
 @dataclass
 class ExperimentConfig:
     """Configuration for probe training experiments."""
-    # Model settings
-    model_name: str = "meta-llama/Meta-Llama-3-8B"
-    experiment: str = "elix"
+    
+    # Model configuration
+    model_name: str = "meta-llama/Llama-2-7b-hf"
     device: str = "cuda"
+    batch_size: int = 32
     
-    # Training settings
-    batch_size: int = 1
+    # Training configuration
     num_epochs: int = 1000
-    learning_rate: float = 0.0001
+    learning_rate: float = 1e-3
+    
+    # Experiment configuration
+    experiment: str = "gms8k"
     random_seed: int = 42
-    downsample: float = 1.0
+    rank: int = 8  # Number of dimensions for the probe output
     
-    # Data settings
-    text_field: str = "prompt_response"  # Field to use from dataset
-    label_field: str = "score"  # Field to use as labels
+    # Text field configuration
+    text_field: str = "question_answer"
     
-    # User settings
-    user: str = "child"  # User type for elix experiment
-    
-    def __post_init__(self):
-        """Validate and set derived attributes."""
-        if self.experiment not in ["elix"]:
-            raise ValueError(f"Unknown experiment type: {self.experiment}")
+    def get_paths(self, base_path: str) -> Dict[str, Dict[str, str]]:
+        """Get all necessary paths for the experiment.
         
-        # Validate user type
-        valid_users = ["child", "preteen", "teenager", "young adult", "expert"]
-        if self.user not in valid_users:
-            raise ValueError(f"Invalid user type: {self.user}. Must be one of {valid_users}")
-        
-        # Set text field based on experiment
-        if self.experiment != "elix":
-            self.text_field = "prompt"
-    
-    def get_paths(self, base_path: str) -> dict:
-        """Get all relevant paths for the experiment."""
-        exp_dir = os.path.join(base_path, "experiments", self.experiment, self.user)
-        
+        Args:
+            base_path (str): Base path for the project
+            
+        Returns:
+            Dict[str, Dict[str, str]]: Dictionary containing all necessary paths
+        """
         return {
-            "data": {
-                "base": os.path.join(exp_dir, "data"),
-                "processed": os.path.join(exp_dir, "data", "train_shuffled_balanced.csv"),
+            'data': {
+                'raw': f"{base_path}/experiments/{self.experiment}/raw",
+                'processed': f"{base_path}/experiments/{self.experiment}/processed",
             },
-            "representations": {
-                "base": os.path.join(exp_dir, "saved_reps"),
-                "layer": lambda layer: os.path.join(
-                    exp_dir, "saved_reps",
-                    f"{self.model_name.split('/')[-1]}_reps_final.pt"
-                ),
+            'representations': {
+                'base': f"{base_path}/experiments/{self.experiment}/representations",
+                'layers': f"{base_path}/experiments/{self.experiment}/representations/layers",
+                'attention': f"{base_path}/experiments/{self.experiment}/representations/attention",
             },
-            "probes": {
-                "base": os.path.join(exp_dir, "saved_probes"),
-                "results": os.path.join(exp_dir, "probing_results"),
+            'probes': {
+                'base': f"{base_path}/experiments/{self.experiment}/saved_probes",
             }
-        }
-    
-    def get_probe_name(self, layer: int) -> str:
-        """Get the name for a probe at a specific layer."""
-        model_name = self.model_name.split('/')[-1]
-        ds_str = f"_downsample_{self.downsample}" if self.downsample < 1 else ""
-        return f"{model_name}_linear_probe_layer_{layer}_rs{self.random_seed}{ds_str}"
-    
-    def get_results_name(self, layer: int) -> str:
-        """Get the name for results at a specific layer."""
-        model_name = self.model_name.split('/')[-1]
-        ds_str = f"_downsample_{self.downsample}" if self.downsample < 1 else ""
-        return f"{model_name}_layer_{layer}_rs{self.random_seed}{ds_str}_validation_results_over_training.json" 
+        } 

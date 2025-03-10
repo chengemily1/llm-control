@@ -39,12 +39,20 @@ def last_token_rep(x, attention_mask, padding='right'):
     return last_token_rep.cpu()
 
 def save_batch_representations(representations, folder, model_name, batch_id):
-    """Save a batch of representations to disk."""
+    """Save a batch of representations to disk, one file per layer."""
     print(f"Saving representations batch {batch_id}...")
-    representations = [torch.cat(batches, dim=0) for batches in zip(*representations)]
-    torch.save(representations, 
-              os.path.join(folder, f"{model_name.split('/')[-1]}_reps_part_{batch_id}.pt"))
-    del representations
+    # Transpose the list of tuples into a list of lists, where each inner list contains all representations for one layer
+    layer_representations = list(zip(*representations))
+    
+    # For each layer, concatenate its representations and save to a separate file
+    for layer_idx, layer_reps in enumerate(layer_representations):
+        layer_tensor = torch.cat(layer_reps, dim=0)
+        layer_file = os.path.join(folder, f"{model_name.split('/')[-1]}_layer_{layer_idx}_reps.pt")
+        torch.save(layer_tensor, layer_file)
+        del layer_tensor
+        torch.cuda.empty_cache()
+    
+    del layer_representations
     torch.cuda.empty_cache()
 
 def save_attention_representations(model, tokenizer, data, output_folder, model_name, device):

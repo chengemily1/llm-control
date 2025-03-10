@@ -15,7 +15,7 @@ if project_root not in sys.path:
 from src.utils.model_utils import setup_model_and_tokenizer
 from src.utils.data_utils import encode_data
 from src.utils.config_utils import load_config
-from src.utils.dataset_utils import process_elix_dataset
+from src.utils.dataset_utils import process_gms8k_dataset
 from src.utils.representation_utils import (
     save_layer_representations,
     save_attention_representations
@@ -40,11 +40,6 @@ def parse_arguments():
     # Other arguments
     parser.add_argument('--attn', type=int, default=0,
                        help='Whether to save attention representations')
-    parser.add_argument('--data_fraction', type=float, default=0.1,
-                       help='Fraction of data to use (default: 0.1)')
-    parser.add_argument('--user', default='child',
-                       choices=['child', 'preteen', 'teenager', 'young adult', 'expert'],
-                       help='User type for elix experiment')
     parser.add_argument('--config', default='src/config.json',
                        help='Path to config file')
     return parser.parse_args()
@@ -66,11 +61,12 @@ def main():
     paths = exp_config.get_paths(config['base_path'])
     
     # Process dataset if needed
-    if not os.path.exists(paths['data']['processed']):
-        process_elix_dataset(args.user, paths['data']['processed'], exp_config, data_fraction=args.data_fraction)
+    processed_file = os.path.join(paths['data']['processed'], 'processed_dataset.csv')
+    if not os.path.exists(processed_file):
+        process_gms8k_dataset(processed_file, exp_config)
     
     # Load processed dataset
-    dataset = pd.read_csv(paths['data']['processed'])
+    dataset = pd.read_csv(processed_file)
     data = list(dataset[exp_config.text_field])
     
     # Setup model and tokenizer
