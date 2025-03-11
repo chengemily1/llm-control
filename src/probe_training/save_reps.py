@@ -41,9 +41,9 @@ def parse_arguments():
     # Other arguments
     parser.add_argument('--attn', type=int, default=0,
                        help='Whether to save attention representations')
-    parser.add_argument('--data_fraction', type=float, default=0.1,
-                       help='Fraction of data to use (default: 0.1)')
-    parser.add_argument('--user', default='child',
+    parser.add_argument('--data_fraction', type=float,
+                       help='Fraction of data to use')
+    parser.add_argument('--user',
                        choices=['child', 'preteen', 'teenager', 'young adult', 'expert'],
                        help='User type for elix experiment')
     parser.add_argument('--config', default='src/config.json',
@@ -68,7 +68,7 @@ def main():
     
     # Process dataset if needed
     if not os.path.exists(paths['data']['processed']):
-        process_elix_dataset(args.user, paths['data']['processed'], exp_config, data_fraction=args.data_fraction)
+        process_elix_dataset(exp_config.user, paths['data']['processed'], exp_config, data_fraction=args.data_fraction)
     
     # Load processed dataset
     dataset = pd.read_csv(paths['data']['processed'])

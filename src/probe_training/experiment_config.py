@@ -24,7 +24,7 @@ class ExperimentConfig:
     label_field: str = "score"  # Field to use as labels
     
     # User settings
-    user: str = "child"  # User type for elix experiment
+    user: str = "preteen"  # User type for elix experiment
     
     def __post_init__(self):
         """Validate and set derived attributes."""
