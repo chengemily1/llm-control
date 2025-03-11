@@ -8,7 +8,7 @@ class ExperimentConfig:
     """Configuration for probe training experiments."""
     
     # Model configuration
-    model_name: str = "meta-llama/Llama-2-7b-hf"
+    model_name: str = "meta-llama/Llama-3-8B"
     device: str = "cuda"
     batch_size: int = 32
     

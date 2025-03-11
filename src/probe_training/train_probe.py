@@ -93,23 +93,28 @@ def main():
     model = LinearProbe(input_dim=input_dim, exp_config=exp_config).to(device)
     
     # Train model
-    model, metrics = train_probe(
+    model, metrics, train_features, val_features = train_probe(
         model, train_features, val_features,
         num_epochs=exp_config.num_epochs,
         learning_rate=exp_config.learning_rate,
         device=device
     )
     
-    # Save results if requested
-    if args.save:
-        save_probe_results(
-            metrics=metrics,
-            model=model,
-            probe_name=exp_config.get_probe_name(args.layer),
-            results_name=exp_config.get_results_name(args.layer),
-            probes_dir=paths['probes']['base'],
-            results_dir=paths['probes']['results']
-        )
+    # Save results and model
+    save_probe_results(
+        metrics=metrics,
+        model=model,
+        config={
+            'model_name': exp_config.model_name,
+            'layer': args.layer,
+            'random_seed': exp_config.random_seed,
+            'downsample': getattr(exp_config, 'downsample', 1.0),
+            'save': bool(args.save)  # Convert to bool for clarity
+        },
+        output_dir=config['base_path'],  # Use base path from config
+        train_features=train_features if args.save else None,
+        val_features=val_features if args.save else None
+    )
 
 if __name__ == "__main__":
     main()

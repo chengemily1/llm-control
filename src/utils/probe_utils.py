@@ -42,11 +42,16 @@ def get_train_val_split(representations, split_percent=0.8, device='cuda'):
     
     return train_features, val_features
 
-def train_probe(model, train_features, val_features, num_epochs=1000, learning_rate=0.0001, device='cuda'):
+def train_probe(model, train_features, val_features, num_epochs=2000, learning_rate=5e-3, device='cuda'):
     """Train a probe model to learn a hyperplane Wx-p=0 that all points lie on."""
     # Setup training
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    metrics = {'train_loss': [], 'val_loss': [], 'epoch': [], 'p_value': [], 'W_norm': [], 'W_stats': []}
+    metrics = {
+        'train_loss': [], 'val_loss': [], 'epoch': [], 
+        'p_value': [], 'W_norm': [], 'W_stats': [],
+        'mean_distance': [], 'max_distance': [], 'std_distance': [],
+        'percent_on_hyperplane': [], 'num_points_on_hyperplane': []
+    }
     
     # Training loop
     for epoch in range(num_epochs):
@@ -57,9 +62,9 @@ def train_probe(model, train_features, val_features, num_epochs=1000, learning_r
         # Get distances to hyperplane
         train_distances = model.get_distance_to_hyperplane(train_features)
         
-        # Use higher power to more strictly enforce points lying on hyperplane
-        # Power of 4 will more heavily penalize points far from hyperplane
-        loss = torch.mean(train_distances ** 4)
+        # Direct distance minimization loss
+        # Use absolute distance to penalize both positive and negative distances
+        loss = torch.mean(torch.abs(train_distances))
         
         # Add L2 regularization on W to prevent degenerate solutions
         W_norm = torch.norm(model.linear.weight)
@@ -72,7 +77,7 @@ def train_probe(model, train_features, val_features, num_epochs=1000, learning_r
         model.eval()
         with torch.no_grad():
             val_distances = model.get_distance_to_hyperplane(val_features)
-            val_loss = torch.mean(val_distances ** 4)
+            val_loss = torch.mean(torch.abs(val_distances))
             
             # Get statistics about W
             W = model.linear.weight
@@ -82,13 +87,18 @@ def train_probe(model, train_features, val_features, num_epochs=1000, learning_r
             W_min = torch.min(W).item()
             W_max = torch.max(W).item()
             
-            # Count points that are "exactly" on hyperplane (within numerical precision)
+            # Calculate distance statistics
+            mean_dist = torch.mean(train_distances).item()
+            max_dist = torch.max(torch.abs(train_distances)).item()
+            std_dist = torch.std(train_distances).item()
+            
+            # Count points that are "exactly" on hyperplane
             exact_threshold = 1e-6
             points_on_hyperplane = torch.sum(torch.abs(train_distances) < exact_threshold).item()
             total_points = train_distances.shape[0]
             percent_on_hyperplane = 100 * points_on_hyperplane / total_points
         
-        # Store metrics
+        # Store all metrics
         metrics['train_loss'].append(float(loss))
         metrics['val_loss'].append(float(val_loss))
         metrics['epoch'].append(epoch)
@@ -100,11 +110,13 @@ def train_probe(model, train_features, val_features, num_epochs=1000, learning_r
             'min': W_min,
             'max': W_max
         })
+        metrics['mean_distance'].append(mean_dist)
+        metrics['max_distance'].append(max_dist)
+        metrics['std_distance'].append(std_dist)
+        metrics['percent_on_hyperplane'].append(percent_on_hyperplane)
+        metrics['num_points_on_hyperplane'].append(points_on_hyperplane)
         
         if (epoch + 1) % 100 == 0:
-            mean_dist = torch.mean(train_distances)
-            max_dist = torch.max(torch.abs(train_distances))
-            std_dist = torch.std(train_distances)
             print(f'Epoch {epoch+1}/{num_epochs}')
             print(f'Loss: {loss:.8f}, Val Loss: {val_loss:.8f}')
             print(f'Mean Distance: {mean_dist:.8f}, Max Abs Distance: {max_dist:.8f}')
@@ -113,36 +125,72 @@ def train_probe(model, train_features, val_features, num_epochs=1000, learning_r
             print(f'W stats - mean: {W_mean:.8f}, std: {W_std:.8f}, min: {W_min:.8f}, max: {W_max:.8f}')
             print(f'Points exactly on hyperplane: {points_on_hyperplane}/{total_points} ({percent_on_hyperplane:.2f}%)')
     
-    return model, metrics
+    return model, metrics, train_features, val_features
 
-def save_probe_results(metrics, model, config, output_dir):
-    """Save probe training results and model."""
-    # Create output directories
-    results_dir = os.path.join(output_dir, 'probing_results')
-    probes_dir = os.path.join(output_dir, 'saved_probes')
+def save_probe_results(metrics, model, config, output_dir, train_features=None, val_features=None):
+    """Save probe training results, model, and representations.
+    
+    Args:
+        metrics: Dictionary containing training metrics
+        model: Trained probe model
+        config: Configuration dictionary containing model_name, layer, random_seed, etc.
+        output_dir: Base output directory
+        train_features: Training set representations (optional)
+        val_features: Validation set representations (optional)
+    """
+    # Create experiment-specific paths
+    experiment_dir = os.path.join(output_dir, 'experiments', 'gms8k')
+    results_dir = os.path.join(experiment_dir, 'probing_results')
+    probes_dir = os.path.join(experiment_dir, 'saved_probes')
+    reps_dir = os.path.join(experiment_dir, 'saved_representations')
+    
+    # Create directories
     os.makedirs(results_dir, exist_ok=True)
     os.makedirs(probes_dir, exist_ok=True)
+    os.makedirs(reps_dir, exist_ok=True)
     
     # Generate file name components
     model_name = config['model_name'].split('/')[-1]
     layer_str = f"layer_{config['layer']}"
     rs_str = f"rs{config['random_seed']}"
-    ds_str = f"_downsample_{config['downsample']}" if config['downsample'] < 1 else ""
+    ds_str = f"_downsample_{config['downsample']}" if config.get('downsample', 1.0) < 1 else ""
+    base_name = f"{model_name}_{layer_str}_{rs_str}{ds_str}"
     
-    # Save metrics and final target vector
-    metrics['final_target_vector'] = model.linear.weight.detach().cpu().numpy().tolist()
+    # Save final model state and hyperplane parameters
+    final_state = {
+        'W': model.linear.weight.detach().cpu().numpy().tolist(),
+        'p': model.p.item(),
+        'W_norm': torch.norm(model.linear.weight).item(),
+        'final_metrics': {
+            'train_loss': metrics['train_loss'][-1],
+            'val_loss': metrics['val_loss'][-1],
+            'mean_distance': metrics['mean_distance'][-1],
+            'max_distance': metrics['max_distance'][-1],
+            'std_distance': metrics['std_distance'][-1],
+            'percent_on_hyperplane': metrics['percent_on_hyperplane'][-1],
+            'num_points_on_hyperplane': metrics['num_points_on_hyperplane'][-1]
+        }
+    }
     
-    metrics_file = os.path.join(
-        results_dir, 
-        f"{model_name}_{layer_str}_{rs_str}{ds_str}_validation_results_over_training.json"
-    )
+    # Save detailed training history
+    metrics['hyperplane_params'] = final_state
+    metrics_file = os.path.join(results_dir, f"{base_name}_training_history.json")
     with open(metrics_file, 'w') as f:
-        json.dump(metrics, f)
+        json.dump(metrics, f, indent=2)
+    print(f"Saved training history to {metrics_file}")
     
-    # Save model if requested
-    if config['save']:
-        model_file = os.path.join(
-            probes_dir,
-            f"{model_name}_linear_probe_{layer_str}_{rs_str}{ds_str}.pt"
-        )
-        torch.save(model, model_file) 
+    # Save model
+    model_file = os.path.join(probes_dir, f"{base_name}_probe.pt")
+    torch.save(model.state_dict(), model_file)  # Save state dict instead of full model
+    print(f"Saved probe model to {model_file}")
+    
+    # Save representations if provided
+    if train_features is not None:
+        train_reps_file = os.path.join(reps_dir, f"{base_name}_train_representations.pt")
+        torch.save(train_features.cpu(), train_reps_file)
+        print(f"Saved training representations to {train_reps_file}")
+    
+    if val_features is not None:
+        val_reps_file = os.path.join(reps_dir, f"{base_name}_val_representations.pt")
+        torch.save(val_features.cpu(), val_reps_file)
+        print(f"Saved validation representations to {val_reps_file}") 
