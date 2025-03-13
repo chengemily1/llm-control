@@ -15,13 +15,13 @@ if project_root not in sys.path:
 from src.utils.model_utils import setup_model_and_tokenizer
 from src.utils.data_utils import encode_data
 from src.utils.config_utils import load_config
-# from src.utils.dataset_utils import process_elix_dataset
-from src.utils.dataset_utils_030625 import process_elix_dataset
+from src.utils.dataset_utils_elix import process_elix_dataset
+from src.utils.dataset_utils_reviews import process_reviews_dataset
 from src.utils.representation_utils import (
     save_layer_representations,
     save_attention_representations
 )
-from src.probe_training.experiment_config import ExperimentConfig
+from src.probe_training.experiment_config import ElixExperimentConfig, ReviewsExperimentConfig
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -29,8 +29,8 @@ def parse_arguments():
     # Optional arguments that override experiment config
     parser.add_argument('--model_name', type=str,
                        help='Override default model name')
-    parser.add_argument('--experiment', type=str,
-                       help='Override default experiment type')
+    parser.add_argument('--experiment', type=str, default='reviews',
+                       help='Experiment type (elix or reviews)')
     parser.add_argument('--device', type=str,
                        help='Override default device')
     parser.add_argument('--batch_size', type=int,
@@ -43,9 +43,7 @@ def parse_arguments():
                        help='Whether to save attention representations')
     parser.add_argument('--data_fraction', type=float,
                        help='Fraction of data to use')
-    parser.add_argument('--user',
-                       choices=['child', 'preteen', 'teenager', 'young adult', 'expert'],
-                       help='User type for elix experiment')
+    parser.add_argument('--user')
     parser.add_argument('--config', default='src/config.json',
                        help='Path to config file')
     return parser.parse_args()
@@ -54,8 +52,13 @@ def main():
     # Parse arguments
     args = parse_arguments()
     
-    # Create experiment config, updating with any provided args
-    exp_config = ExperimentConfig()
+    # Create experiment config based on experiment type
+    if args.experiment == 'reviews':
+        exp_config = ReviewsExperimentConfig()
+    else:
+        exp_config = ElixExperimentConfig()
+    
+    # Update config with any provided args
     for key, value in vars(args).items():
         if value is not None and hasattr(exp_config, key):
             setattr(exp_config, key, value)
@@ -68,7 +71,10 @@ def main():
     
     # Process dataset if needed
     if not os.path.exists(paths['data']['processed']):
-        process_elix_dataset(exp_config.user, paths['data']['processed'], exp_config, data_fraction=args.data_fraction)
+        if exp_config.get_experiment_name() == "elix":
+            process_elix_dataset(exp_config.user, paths['data']['processed'], exp_config, data_fraction=args.data_fraction)
+        elif exp_config.get_experiment_name() == "reviews":
+            process_reviews_dataset(exp_config.user, paths['data']['processed'], exp_config, data_fraction=args.data_fraction)
     
     # Load processed dataset
     dataset = pd.read_csv(paths['data']['processed'])
@@ -114,5 +120,5 @@ def main():
         )
 
 if __name__ == "__main__":
-    # Use: python src/probe_training/save_reps.py --data_fraction 0.1 --user child
+    # Use: python src/probe_training/save_reps.py --experiment reviews --user 1
     main()

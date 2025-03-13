@@ -1,0 +1,86 @@
+{
+  "q0": {
+    "m": "controlled",
+    "M": "baseline"
+  },
+  "q1": {
+    "m": "baseline",
+    "M": "controlled"
+  },
+  "q2": {
+    "m": "baseline",
+    "M": "controlled"
+  },
+  "q3": {
+    "m": "controlled",
+    "M": "baseline"
+  },
+  "q4": {
+    "m": "controlled",
+    "M": "baseline"
+  },
+  "q5": {
+    "m": "baseline",
+    "M": "controlled"
+  },
+  "q6": {
+    "m": "controlled",
+    "M": "baseline"
+  },
+  "q7": {
+    "m": "controlled",
+    "M": "baseline"
+  },
+  "q8": {
+    "m": "controlled",
+    "M": "baseline"
+  },
+  "q9": {
+    "m": "controlled",
+    "M": "baseline"
+  },
+  "q10": {
+    "m": "controlled",
+    "M": "baseline"
+  },
+  "q11": {
+    "m": "baseline",
+    "M": "controlled"
+  },
+  "q12": {
+    "m": "controlled",
+    "M": "baseline"
+  },
+  "q13": {
+    "m": "controlled",
+    "M": "baseline"
+  },
+  "q14": {
+    "m": "controlled",
+    "M": "baseline"
+  },
+  "q15": {
+    "m": "controlled",
+    "M": "baseline"
+  },
+  "q16": {
+    "m": "baseline",
+    "M": "controlled"
+  },
+  "q17": {
+    "m": "controlled",
+    "M": "baseline"
+  },
+  "q18": {
+    "m": "baseline",
+    "M": "controlled"
+  },
+  "q19": {
+    "m": "baseline",
+    "M": "controlled"
+  },
+  "q20": {
+    "m": "controlled",
+    "M": "baseline"
+  }
+}

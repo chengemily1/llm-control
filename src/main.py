@@ -7,9 +7,9 @@ import torch
 import random
 from tqdm import tqdm
 
-# Add the parent directory to the Python path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+# Add the project root to the Python path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, project_root)
 
 from src.utils.data_utils import (
     encode_data, 
@@ -33,7 +33,7 @@ from src.steering_methods.model_wrapper import (
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description='training proof-of-concept')
-    parser.add_argument('--experiment', type=str, default='elix')
+    parser.add_argument('--experiment', type=str, default='reviews')
     parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3-8B")
     parser.add_argument('--method', default='liseco', choices=['baseline', 'liseco', 'instruct'])
     parser.add_argument('--layers', metavar='N', type=int, nargs='+', 
@@ -41,11 +41,11 @@ def parse_arguments():
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--liseco_lower', type=float, default=0.7)
     parser.add_argument('--liseco_upper', type=float, default=1)
-    parser.add_argument('--liseco_map', default='identity', choices=['sigmoid', 'tanh', 'identity'])
+    parser.add_argument('--liseco_map', default='sigmoid', choices=['sigmoid', 'tanh', 'identity'])
     parser.add_argument('--s', default=None, type=float)
-    parser.add_argument('--r2_threshold', type=float, default=0,
-                       help='R² threshold for automatic layer selection')
-    parser.add_argument('--config', default='/scratch/llm-control/src/config.json', help='path to config file')
+    #parser.add_argument('--r2_threshold', type=float, default=0,
+                       #help='R² threshold for automatic layer selection')
+    parser.add_argument('--config', default='/scr/biggest/carmen/llm-control/src/config.json', help='path to config file')
     return parser.parse_args()
 
 def main():
@@ -64,7 +64,7 @@ def main():
     # Get layers to control
     if args.layers is None:
         print("\nNo layers specified, selecting layers based on R² scores...")
-        selected_layers = get_layers_by_r2(args.model_name, config['base_path'], args.r2_threshold)
+        selected_layers = get_layers_by_r2(args.model_name, config['base_path'])#, args.r2_threshold)
         if not selected_layers:
             print("No layers found with sufficient R² scores. Using all layers.")
             selected_layers = list(range(model.config.num_hidden_layers))
@@ -93,7 +93,7 @@ def main():
     layerlist = get_layer_list(model, args.model_name)
     
     # Load and process dataset
-    data = load_and_process_dataset()
+    data = load_and_process_dataset(experiment=args.experiment)
     
     # Initialize results dictionary
     results_dict = {}
@@ -130,8 +130,8 @@ def main():
                 inputs=encoding['input_ids'],
                 min_new_tokens=1,
                 max_new_tokens=100,
-                do_sample=False,
-                temperature=1.0,
+                do_sample=True,
+                temperature=.5,
                 top_p=1.0,
                 repetition_penalty=1.0,
                 return_dict_in_generate=True,
@@ -146,6 +146,8 @@ def main():
             results_dict[data[i]].update(generation_results)
             
             print(f"Generated text: {generation_results['generated_text']}")
+
+            breakpoint()
             
             # Collect metrics for each layer
             for layer in range(num_layers):

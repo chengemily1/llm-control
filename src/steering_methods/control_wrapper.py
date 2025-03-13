@@ -22,7 +22,7 @@ import random
 from sklearn.metrics import f1_score 
 from scipy import optimize
 from src.utils.config_utils import load_config
-from src.utils.probe_utils import LinearProbe
+from src.utils.probe_utils_regression import LinearProbe
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 

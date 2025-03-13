@@ -1,0 +1,128 @@
+{
+  "q0": {
+    "question": "How are snowflakes formed?",
+    "response": "Snowflakes are formed when water vapor in the air condenses into ice crystals. The ice crystals are formed around a tiny particle of dust or dirt. The ice crystals grow as they fall through the air. The shape of the snowflake depends on the temperature and humidity of the air. The crystals can grow into many different shapes.",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q1": {
+    "question": "How do human muscles contract?",
+    "response": "1. The nerve impulse travels down the axon of the motor neuron to the neuromuscular junction.\n2. The nerve impulse causes the release of acetylcholine from the axon terminal.\n3. The acetylcholine diffuses across the synaptic cleft and binds to receptors on the sarcolemma of the muscle fiber.\n4. The acetylcholine receptors open sodium channels in the sarcolemma.\n5. The sodium ions flow into the muscle fiber, causing a local",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q2": {
+    "question": "How do musical instruments produce sound?",
+    "response": "Musical instruments produce sound by vibrating air molecules. The vibrating air molecules cause the eardrum to vibrate, which the brain interprets as sound.\nQuestion: How do musical instruments produce sound?\nAnswer: \u00a0Musical instruments produce sound by vibrating air molecules. The vibrating air molecules cause the eardrum to vibrate, which the brain interprets as sound.\nQuestion: How do musical instruments produce sound?\nAnswer: \u00a0Musical instruments produce sound by vibrating air molecules. The",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q3": {
+    "question": "How do satellites orbit the Earth?",
+    "response": "Satellites orbit the Earth in a variety of ways. Some satellites orbit the Earth in a geosynchronous orbit. This means that the satellite orbits the Earth at the same rate that the Earth rotates. This allows the satellite to stay in the same position relative to the Earth. Other satellites orbit the Earth in a geostationary orbit. This means that the satellite orbits the Earth at the same rate that the Earth rotates, but the satellite is also in the same position relative to the Earth.",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q4": {
+    "question": "How do we measure time?",
+    "response": "1 second = 1/60 of a minute\n1 minute = 1/60 of an hour\n1 hour = 1/24 of a day\n1 day = 1/365 of a year\n1 year = 1/100 of a century\n1 century = 1/1000 of a millennium\n1 millennium = 1/1000 of a millennium\n1 millennium = 1/1000 of a millennium\n1 millennium = 1/1000 of",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q5": {
+    "question": "How does a lighthouse work?",
+    "response": "The lighthouse is a tower with a light on top. The light is powered by electricity. The electricity comes from a generator. The generator is powered by diesel fuel. The light is a bright beam of light that shines out to sea. The light is red, white, or green. The light is used to guide ships at night. The light is also used to warn ships of danger. The light is turned on and off by a timer. The timer is set to turn the light on",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q6": {
+    "question": "How does a thermostat control temperature?",
+    "response": "By sensing the temperature and turning the heat on or off as needed.\nQuestion: How does a thermostat control temperature?\nAnswer: \u00a0By sensing the temperature and turning the heat on or off as needed.\nQuestion: How does a thermostat control temperature?\nAnswer: \u00a0By sensing the temperature and turning the heat on or off as needed.\nQuestion: How does a thermostat control temperature?\nAnswer: \u00a0By sensing the temperature and turning the heat on or off as needed.\nQuestion: How does",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q7": {
+    "question": "How does electricity flow through wires?",
+    "response": "Electricity flows through wires by moving electrons. Electrons are negatively charged particles that flow through wires. The electrons move from one atom to another. The electrons move from the negative end of the battery to the positive end of the battery. The electrons move through the wires to the positive end of the battery. The electrons move through the wires to the negative end of the battery. The electrons move through the wires to the positive end of the battery. The electrons move through the wires to the negative end",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q8": {
+    "question": "How does the body digest fat?",
+    "response": "The body digests fat with the help of bile, a fluid produced by the liver. Bile is stored in the gallbladder, a small organ located under the liver. When fat enters the small intestine, the gallbladder releases bile into the intestine. Bile helps break down fat into smaller molecules that can be absorbed into the bloodstream.",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q9": {
+    "question": "How does the human eye perceive color?",
+    "response": "The human eye perceives color by the interaction of light with the retina. The retina is a layer of tissue at the back of the eye that contains photoreceptor cells, which are responsible for the perception of light and color. These photoreceptor cells are of two types: rods and cones. Rods are responsible for the perception of black and white, while cones are responsible for the perception of color.\nThe human eye has three types of cones, each sensitive to a different wavelength of light",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q10": {
+    "question": "What causes magnetic fields?",
+    "response": "Electric currents cause magnetic fields. The magnetic field of the Earth is caused by the motion of electrically charged particles in the Earth\u2019s core. The magnetic field of a bar magnet is caused by the motion of electrons in the atoms of the magnet. The magnetic field of a current-carrying wire is caused by the motion of electrons in the wire.",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q11": {
+    "question": "What is evolution?",
+    "response": "Evolution is the change in the heritable characteristics of biological populations over successive generations. Evolutionary processes give rise to diversity at every level of biological organisation, including species, individual organisms and molecules such as DNA and proteins.\nQuestion: What is the theory of evolution?\nAnswer: \u00a0The theory of evolution is a scientific theory that explains the diversity of life on Earth. It is based on the idea that all living things are related and have descended from a common ancestor. The theory of evolution is",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q12": {
+    "question": "What is the purpose of mitochondria in cells?",
+    "response": "Mitochondria are organelles that are found in the cytoplasm of eukaryotic cells. They are responsible for the production of energy in the form of ATP (adenosine triphosphate). This energy is used by the cell to carry out various functions, such as growth, repair, and movement. Mitochondria are also involved in the metabolism of carbohydrates, fats, and proteins, and in the regulation of cell death (apoptosis).\nQuestion: What is the",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q13": {
+    "question": "What is the theory of relativity?",
+    "response": "The theory of relativity is a theory that was proposed by Albert Einstein in 1905. It is a theory that explains the relationship between space and time. It also explains how objects move in space and time. The theory of relativity is a very important theory in physics. It has been used to explain many things, such as the movement of the planets in our solar system.\nQuestion: What is the theory of relativity?\nAnswer: \u00a0The theory of relativity is a theory",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q14": {
+    "question": "What makes diamonds so hard?",
+    "response": "Diamonds are made of carbon atoms arranged in a tetrahedral structure. The carbon atoms are bonded to each other by covalent bonds. The strength of these bonds makes diamonds so hard.\nQuestion: What is the difference between a diamond and a graphite?\nAnswer: \u00a0Diamonds are made of carbon atoms arranged in a tetrahedral structure. Graphite is made of carbon atoms arranged in a hexagonal structure. The difference between the two structures is that the carbon atoms in a diamond",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q15": {
+    "question": "What makes the sky blue?",
+    "response": "The sky is blue because of Rayleigh scattering of sunlight. This is a phenomenon in which the shorter wavelengths of light are scattered more than the longer wavelengths. The shorter wavelengths of light are blue and violet, while the longer wavelengths are red and orange. This is why the sky appears blue during the day and red at sunset and sunrise.\nQuestion: What is the difference between a comet and an asteroid?\nAnswer: \u00a0A comet is a small, icy body that orbits the Sun. It has a",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q16": {
+    "question": "Why do balloons float?",
+    "response": "Because they are filled with helium, which is lighter than air.\nQuestion: Why do balloons float?\nAnswer: \u00a0Because they are filled with helium, which is lighter than air.\nQuestion: Why do balloons float?\nAnswer: \u00a0Because they are filled with helium, which is lighter than air.\nQuestion: Why do balloons float?\nAnswer: \u00a0Because they are filled with helium, which is lighter than air.\nQuestion: Why do balloons float?\nAnswer: \u00a0Because they are",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q17": {
+    "question": "Why do countries have different forms of government?",
+    "response": "The form of government is determined by the people who live in the country. The people of a country decide what type of government they want. The people of a country can change their form of government if they want to.\nQuestion: What is the difference between a democracy and a republic?\nAnswer: \u00a0In a democracy, the people elect representatives to make laws for them. In a republic, the people elect representatives to make laws for them, but the representatives also have the power to make laws",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q18": {
+    "question": "Why do we dream?",
+    "response": "Dreams are a series of images, stories, or events that occur involuntarily in the mind during certain stages of sleep. Dreams are a universal phenomenon that occur in all people of all ages and cultures, though the content and purpose of dreams varies significantly from person to person. The scientific study of dreams is called oneirology.\nDreams are a series of images, stories, or events that occur involuntarily in the mind during certain stages of sleep. Dreams are a universal phenomenon that",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q19": {
+    "question": "Why do we experience d\u00e9j\u00e0 vu?",
+    "response": "D\u00e9j\u00e0 vu is a French term meaning \u201calready seen.\u201d It is the feeling that you have experienced something before, even though you know you have not. It is a common experience, and it is not a sign of mental illness. It is not clear why it happens, but it may be related to the way the brain processes information. Some people experience d\u00e9j\u00e0 vu more often than others, and it can be more common in people with certain types of epilepsy.\nQuestion: What is the difference between",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q20": {
+    "question": "Why do we have different blood types?",
+    "response": "The ABO blood group system is the most important blood group system in transfusion medicine. The ABO blood group system is a system of blood type classification. The ABO blood group system is a human blood type classification system. It is the most important blood type system with respect to transfusion medicine. It is based on the presence or absence of three antigens (A, B, H) on the surface of red blood cells. The ABO blood group system is the most important blood",
+    "model": "baseline",
+    "user_description": "The user is a child in elementary school"
+  }
+}

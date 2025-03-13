@@ -68,9 +68,16 @@ def encode_data(tokenizer, N, data, batch_size, max_length, device):
     
     return encodings
 
-def load_and_process_dataset():
-    """Load and preprocess the dataset."""
-    test_dataset = load_dataset("Asap7772/elix_generations_gpt4omini_pref")
+def load_and_process_dataset(experiment='reviews'):
+    """Load and preprocess the dataset.
+    
+    Args:
+        experiment (str): Type of experiment ('elix' or 'reviews')
+    """
+    if experiment == 'elix':
+        test_dataset = load_dataset("Asap7772/elix_generations_gpt4omini_pref")
+    elif experiment == 'reviews':
+        test_dataset = load_dataset("Asap7772/steered_reviews_full_autolabel_gpt4o_pref")
     dataset = pd.DataFrame(test_dataset['test'])
     text_field = 'prompt'
 

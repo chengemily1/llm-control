@@ -1,0 +1,128 @@
+{
+  "q0": {
+    "question": "How are snowflakes formed?",
+    "response": "Snowflakes are formed when water vapor in the air freezes into ice crystals. The crystals are made of six sides. Each side is a flat hexagon. The crystals are shaped by the air around them. The crystals are made of water molecules. The water molecules are held together by weak forces. The forces are called hydrogen bonds. The bonds are between the hydrogen atoms and the oxygen atoms in the water molecules. The bonds are weak, but they are strong enough to hold the water molecules together",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q1": {
+    "question": "How do human muscles contract?",
+    "response": "Muscles contract when the muscle fibers shorten. The muscle fibers are made up of cells called muscle fibers. The muscle fibers are made up of smaller cells called myofibrils. The myofibrils are made up of smaller cells called sarcomeres. The sarcomeres are made up of smaller cells called actin and myosin. The actin and myosin cells are made up of smaller cells called myofilaments. The myofilaments are made up of smaller cells",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q2": {
+    "question": "How do musical instruments produce sound?",
+    "response": "Musical instruments produce sound by vibrating a string, column of air, or metal plate.\nMusical instruments are used to make music. They are made of different materials and come in different shapes and sizes. Some instruments are played by blowing into them, while others are played by plucking or striking them. All musical instruments produce sound by vibrating a string, column of air, or metal plate.\nA string instrument is an instrument that has strings that are plucked or strummed. The strings",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q3": {
+    "question": "How do satellites orbit the Earth?",
+    "response": "Satellites orbit the Earth in a variety of ways. Some satellites orbit the Earth in a geosynchronous orbit. This means that they orbit the Earth in the same direction and at the same speed as the Earth rotates. This allows the satellite to stay in the same place above the Earth. This is useful for communication satellites. Other satellites orbit the Earth in a polar orbit. This means that they orbit the Earth in a circle around the North and South Poles. This is useful for weather satellites",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q4": {
+    "question": "How do we measure time?",
+    "response": "1 second = 1/60 of a minute\n1 minute = 1/60 of an hour\n1 hour = 1/24 of a day\n1 day = 1/365 of a year\n1 year = 1/100 of a century\n1 century = 1/1000 of a millennium\n1 millennium = 1/1000 of a millennium\n1 millennium = 1/1000 of a millennium\n1 millennium = 1/1000 of",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q5": {
+    "question": "How does a lighthouse work?",
+    "response": "It uses a light bulb to make light. The light bulb is powered by electricity. The electricity comes from a generator. The generator is powered by wind. The wind turns the generator. The generator makes electricity. The electricity powers the light bulb. The light bulb makes light. The light shines out of the lighthouse. The light shines out of the lighthouse. The light shines out of the lighthouse. The light shines out of the lighthouse. The light shines out of the lighthouse",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q6": {
+    "question": "How does a thermostat control temperature?",
+    "response": "By sensing the temperature and turning on or off the heating or cooling system.\nQuestion: How does a thermostat control temperature?\nAnswer: \u00a0By sensing the temperature and turning on or off the heating or cooling system.\nQuestion: How does a thermostat control temperature?\nAnswer: \u00a0By sensing the temperature and turning on or off the heating or cooling system.\nQuestion: How does a thermostat control temperature?\nAnswer: \u00a0By sensing the temperature and turning on or off the heating or cooling system.",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q7": {
+    "question": "How does electricity flow through wires?",
+    "response": "Electricity flows through wires by moving electrons. Electrons are negatively charged particles that are found in the atoms of all matter. The electrons are held in place by the positively charged nucleus of the atom. When electricity flows through a wire, the electrons move from atom to atom. The electrons move from the negative end of the wire to the positive end of the wire. The electrons move through the wire because of the electric field. The electric field is created by the electric charge. The electric charge is",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q8": {
+    "question": "How does the body digest fat?",
+    "response": "The body digests fat with the help of bile, which is made in the liver. Bile is a greenish-yellow liquid that is stored in the gallbladder. When you eat fat, the gallbladder releases bile into the small intestine. Bile helps break down fat into smaller pieces. The body then uses these smaller pieces of fat to make energy.\nQuestion: How does the body digest protein?\nAnswer: \u00a0The body digests protein with the help of an enzyme called",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q9": {
+    "question": "How does the human eye perceive color?",
+    "response": "The human eye perceives color through the use of three types of cones, which are light-sensitive cells in the retina. Each cone is sensitive to a different wavelength of light. The first cone is sensitive to red light, the second cone is sensitive to green light, and the third cone is sensitive to blue light. When light of different wavelengths hits the eye, the cones send signals to the brain, which interprets the signals as color.",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q10": {
+    "question": "What causes magnetic fields?",
+    "response": "Electric currents cause magnetic fields. \u00a0The magnetic field is a force field that surrounds a magnet. \u00a0The magnetic field is a force field that surrounds a magnet. \u00a0The magnetic field is a force field that surrounds a magnet. \u00a0The magnetic field is a force field that surrounds a magnet. \u00a0The magnetic field is a force field that surrounds a magnet. \u00a0The magnetic field is a force field that surrounds a magnet. \u00a0The magnetic field is a force field",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q11": {
+    "question": "What is evolution?",
+    "response": "Evolution is the process by which living things change over time. It is a natural process that has been happening for billions of years. Evolution is a fact, not a theory. A theory is a well-tested explanation of something. Evolution is a theory because it is a well-tested explanation of how living things change over time. Evolution is a fact because it has been observed happening. Scientists have seen evolution happen in the wild and in the lab. Evolution is a fact because it has been observed happening",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q12": {
+    "question": "What is the purpose of mitochondria in cells?",
+    "response": "Mitochondria are the powerhouses of the cell. They are responsible for producing energy for the cell to use. They are also involved in cell signaling and cell death.\nQuestion: What is the purpose of the Golgi apparatus in cells?\nAnswer: \u00a0The Golgi apparatus is responsible for packaging and shipping proteins and other materials around the cell. It also helps with cell growth and division.\nQuestion: What is the purpose of the endoplasmic reticulum in cells?\nAnswer:",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q13": {
+    "question": "What is the theory of relativity?",
+    "response": "The theory of relativity is a theory of physics that was developed by Albert Einstein. It is a theory that explains how space and time are related. It also explains how mass and energy are related. The theory of relativity is made up of two parts: the special theory of relativity and the general theory of relativity. The special theory of relativity explains how space and time are related when objects are moving at a constant speed. The general theory of relativity explains how space and time",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q14": {
+    "question": "What makes diamonds so hard?",
+    "response": "Diamonds are made of carbon atoms that are arranged in a lattice of strong covalent bonds. This makes diamonds very hard and very strong.\nQuestion: What is the hardest substance on Earth?\nAnswer: \u00a0Diamonds are the hardest substance on Earth. They are made of carbon atoms that are arranged in a lattice of strong covalent bonds. This makes diamonds very hard and very strong.\nQuestion: What is the hardest substance on Earth?\nAnswer: \u00a0Diamonds are the hardest",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q15": {
+    "question": "What makes the sky blue?",
+    "response": "The sky is blue because of Rayleigh scattering. This is the same process that makes the sky red at sunrise and sunset. The blue color is caused by the scattering of blue light by the air molecules. The red color is caused by the scattering of red light by the air molecules. The blue color is caused by the scattering of blue light by the air molecules. The red color is caused by the scattering of red light by the air molecules. The blue color is caused by the scattering of blue",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q16": {
+    "question": "Why do balloons float?",
+    "response": "Because they are filled with helium, which is a gas. Gases are lighter than air, so they float up. Helium is a very light gas, so it floats up really easily. It is so light that it can float up through the air without any help from a balloon. Helium is used in balloons because it is so light. It is also used in weather balloons, because it is so light that it can float up into the sky. Helium is also used in air",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q17": {
+    "question": "Why do countries have different forms of government?",
+    "response": "Different countries have different forms of government because of their history, geography, and culture.\u00a0\nThe United States has a democratic form of government.\u00a0 In a democracy, the people elect representatives to make laws and run the government.\u00a0 The United States has a federal form of government.\u00a0 This means that the country is divided into states.\u00a0 Each state has its own government.\u00a0 The federal government is the government of the United States.\u00a0 It is made up of three branches: the legislative,",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q18": {
+    "question": "Why do we dream?",
+    "response": "Dreams are a way for the unconscious mind to process and store memories. They are also a way for the unconscious mind to express itself. Dreams can be about anything, from the mundane to the fantastical. They can be happy or sad, and they can be about anything that is on your mind. Dreams are a way for the unconscious mind to process and store memories. They are also a way for the unconscious mind to express itself. Dreams can be about anything, from the mundane to the",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q19": {
+    "question": "Why do we experience d\u00e9j\u00e0 vu?",
+    "response": "D\u00e9j\u00e0 vu is a French phrase that means \u201calready seen.\u201d It\u2019s the feeling that you\u2019ve already experienced something that you\u2019re experiencing for the first time. It\u2019s a common experience, but it\u2019s not well understood. It\u2019s not a sign of a mental illness. It\u2019s not a sign of a brain injury. It\u2019s not a sign of a brain tumor. It\u2019s not a sign of epilepsy. It\u2019s not a sign of dementia. It\u2019s not a sign of schizophrenia.",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  },
+  "q20": {
+    "question": "Why do we have different blood types?",
+    "response": "The blood type is determined by the presence or absence of certain proteins on the surface of red blood cells. These proteins are called antigens. There are two main types of antigens: A and B. If a person has both A and B antigens, they are called AB blood type. If a person has only A antigens, they are called A blood type. If a person has only B antigens, they are called B blood type. If a person has neither A nor B",
+    "model": "controlled",
+    "user_description": "The user is a child in elementary school"
+  }
+}

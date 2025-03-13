@@ -9,13 +9,13 @@ def load_config(config_path='src/config.json'):
             
         # Get values from config or fall back to environment variables
         access_token = config.get('hf_access_token', os.environ.get('HF_ACCESS_TOKEN'))
-        base_path = config.get('path', os.getcwd())
+        base_path = config.get('base_path', os.getcwd())
         
         if not access_token:
             raise ValueError("Please set HF_ACCESS_TOKEN in config.json or as environment variable")
             
         return {
-            'access_token': access_token,
+            'access_token': access_token,  # Return as access_token for consistency
             'base_path': base_path
         }
         
