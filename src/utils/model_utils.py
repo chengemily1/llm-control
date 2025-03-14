@@ -1,7 +1,7 @@
 import os
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
-
+import pdb
 def setup_model_and_tokenizer(model_name, access_token, device):
     """Set up and configure the model and tokenizer."""
     # Configure tokenizer first
@@ -58,7 +58,7 @@ def get_layer_list(model, model_name):
     """Get the appropriate layer list based on model type."""
     return model.gpt_neox.layers if 'pythia' in model_name else model.model.layers 
 
-def get_layers_by_r2(model_name: str, base_path: str, r2_threshold: float = 0.5) -> list:
+def get_layers_by_r2(model_name: str, base_path: str, experiment: str, r2_threshold: float = 0.5) -> list:
     """Get layers whose probes achieved R² scores above the threshold.
     
     Args:
@@ -75,10 +75,12 @@ def get_layers_by_r2(model_name: str, base_path: str, r2_threshold: float = 0.5)
     
     # Get the model name without path
     model_short_name = model_name.split('/')[-1]
-    
+
     # Find all probe result files for this model
-    results_path = os.path.join(base_path, 'experiments/elix/probing_results')
-    pattern = os.path.join(results_path, f"{model_short_name}_layer_*_validation_results_over_training.json")
+    if 'reviews' in experiment:
+        experiment = 'reviews/user_negative'
+    results_path = os.path.join(base_path, f'experiments/{experiment}/probing_results')
+    pattern = os.path.join(results_path, f"{model_short_name}_layer_*_classification_results.json")
     result_files = glob.glob(pattern)
     
     good_layers = []
@@ -92,7 +94,10 @@ def get_layers_by_r2(model_name: str, base_path: str, r2_threshold: float = 0.5)
             results = json.load(f)
         
         # Get final R² score
-        final_r2 = results['val_r2'][-1]
+        if 'val_r2' in results:
+            final_r2 = results['val_r2'][-1]
+        else:
+            final_r2 = results['val_accuracy'][-1]
         
         if final_r2 >= r2_threshold:
             good_layers.append(layer_num)

@@ -43,8 +43,8 @@ def parse_arguments():
     parser.add_argument('--liseco_upper', type=float, default=1)
     parser.add_argument('--liseco_map', default='sigmoid', choices=['sigmoid', 'tanh', 'identity'])
     parser.add_argument('--s', default=None, type=float)
-    #parser.add_argument('--r2_threshold', type=float, default=0,
-                       #help='R² threshold for automatic layer selection')
+    parser.add_argument('--r2_threshold', type=float, default=0,
+                       help='R² threshold for automatic layer selection')
     parser.add_argument('--config', default='/scr/biggest/carmen/llm-control/src/config.json', help='path to config file')
     return parser.parse_args()
 
@@ -64,7 +64,7 @@ def main():
     # Get layers to control
     if args.layers is None:
         print("\nNo layers specified, selecting layers based on R² scores...")
-        selected_layers = get_layers_by_r2(args.model_name, config['base_path'])#, args.r2_threshold)
+        selected_layers = get_layers_by_r2(args.model_name, config['base_path'], args.experiment, args.r2_threshold)
         if not selected_layers:
             print("No layers found with sufficient R² scores. Using all layers.")
             selected_layers = list(range(model.config.num_hidden_layers))
@@ -86,6 +86,7 @@ def main():
         selected_layers=selected_layers,
         liseco_params=liseco_params
     )
+    input()
     
     # Load probes and get layer list
     Ws = load_probes(model, args, config['base_path'])
@@ -131,8 +132,8 @@ def main():
                 min_new_tokens=1,
                 max_new_tokens=100,
                 do_sample=True,
-                temperature=.5,
-                top_p=1.0,
+                temperature=.2,
+                top_p=0.3,
                 repetition_penalty=1.0,
                 return_dict_in_generate=True,
                 output_scores=True,

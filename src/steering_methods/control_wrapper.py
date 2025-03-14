@@ -36,7 +36,7 @@ MAP = {
 
 INVERSE_MAP = {
     'identity': lambda x: x, 
-    'sigmoid': lambda x: np.log(x) - np.log(1-x) if x != 0 else - np.infty,
+    'sigmoid': lambda x: np.log(x) - np.log(1-x) if 0 < x < 1 else (- np.infty if x == 0 else np.infty),
     'tanh': np.arctanh
 }
 
@@ -124,6 +124,8 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
         self.inverse_map = INVERSE_MAP[map_to_target_space]
 
         # Set the bounds in the "inverse space"
+        self.lower = lower 
+        self.upper = upper
         self.a = self.inverse_map(lower) # the thresholds we're comfortable with in target space
         self.b = self.inverse_map(upper) 
         
@@ -139,6 +141,7 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
             self.probe = self.probe.to(last_token_rep.device)
             
         eval_result = self.probe(last_token_rep)
+
         # Keep as tensor until needed
         return self.forward_map(eval_result.squeeze()).detach()  # Return tensor instead of converting to numpy
 
@@ -153,7 +156,8 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
             last_token_idx = x_seq.size(1) - 1
             
         # Store the tensor result
-        self.pre_adjust_toxicity_log.append(self.eval_probe(x_seq, last_token_idx))
+        p_before = self.eval_probe(x_seq, last_token_idx)
+        self.pre_adjust_toxicity_log.append(p_before)
         
         if self.control: # Make the adjustment
             # Get last token representation
@@ -166,7 +170,11 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
             x_seq[torch.arange(x_seq.size(0)), last_token_idx] += theta
 
         # Add to toxicity log
-        self.post_adjust_toxicity_log.append(self.eval_probe(x_seq, last_token_idx))
+        post_adjust_p = self.eval_probe(x_seq, last_token_idx)
+        if self.control: 
+            assert self.lower - 0.01 <= post_adjust_p <= self.upper
+
+        self.post_adjust_toxicity_log.append(post_adjust_p)
         self.latency.append(time.time() - t)
         return x_seq, x_metadata
 
