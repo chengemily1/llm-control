@@ -14,7 +14,7 @@ from sklearn.metrics import f1_score
 from scipy import optimize  
 import time
 from typing import Optional
-from src.data_util import encode_data
+from data_util import encode_data
 
 
 # Different strictly monotone functions 
@@ -80,7 +80,7 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
                  upper: float, 
                  map_to_target_space: str, 
                  name: Optional[str] = "LiSeCo",
-                 device: Optional[str] = 'cpu'
+                 device: Optional[str] = 'cuda'
                  ):
         """Sets up a layer wrapper to constrain the score, as determined by the linear probe, to [lower, upper] in 
         target space.
@@ -139,9 +139,10 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
         self.pre_adjust_toxicity_log.append(self.eval_probe(x_seq, last_token_idx))
         
         if self.control: # Make the adjustment
-            x_seq[torch.arange(x_seq.size(0)),last_token_idx] += self.optimal_theta(
+            theta = self.optimal_theta(
                 x_seq[torch.arange(x_seq.size(0)),last_token_idx] # get last token rep
             )
+            x_seq[torch.arange(x_seq.size(0)),last_token_idx] += theta
 
         # Add to toxicity log
         self.post_adjust_toxicity_log.append(self.eval_probe(x_seq, last_token_idx)) # this is the probscore

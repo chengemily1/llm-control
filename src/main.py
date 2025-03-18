@@ -14,7 +14,7 @@ from sklearn.metrics import f1_score
 
 from control_wrapper import LiSeCoWrapper
 from actadd_wrapper import ActAddWrapper
-from fudge_wrapper import FudgeWrapper
+# from fudge_wrapper import FudgeWrapper
 from instructions import *
 from data_util import encode_data
 
@@ -59,20 +59,21 @@ model = AutoModelForCausalLM.from_pretrained(args.model_name,
 if 'Llama' in args.model_name:
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
+    model.generation_config.pad_token_id = tokenizer.pad_token_id
+
 elif 'pythia' in args.model_name or 'mistral' in args.model_name:
     tokenizer.pad_token = tokenizer.eos_token
 elif 'OLMo' in args.model_name:
     model.config.max_position_embeddings = model.config.max_sequence_length
 
 model.eval()
-# pdb.set_trace()
 
 # Load all linear probes
 num_layers = model.config.num_hidden_layers
 
 Ws = [
     torch.load(
-        f'{YOUR_PATH}/experiments/{args.experiment}/saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}{"_rs43" if args.experiment in ("formality", "sentiment") else ""}.pt'
+        f'{YOUR_PATH}/experiments/{args.experiment}/saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}{"_rs0" if args.experiment in ("formality", "sentiment") else ""}.pt'
         ).to(args.device)
     for layer in range(1, num_layers+1)
 ]
@@ -89,7 +90,6 @@ if args.method == 'instruct':
 # ORIGINAL BASELINE
 model.eval()
 print(args)
-# pdb.set_trace()
 
 if 'pythia' in args.model_name:
     layerlist = model.gpt_neox.layers
@@ -108,8 +108,7 @@ if args.method == 'actadd':
 ###################### FUDGE
 if args.method == 'fudge':
     # find the unembedding matrix and wrap it.
-    # print(model)
-    # pdb.set_trace()
+
     if 'pythia' in args.model_name:
         model.embed_out = FudgeWrapper(model.embed_out, args.experiment, tokenizer, device=args.device, k=50)
         lm_head = model.embed_out
@@ -127,7 +126,8 @@ def retrofit_model(Ws):
                 linear_probe=Ws[layer],
                 lower=args.liseco_lower,
                 upper=args.liseco_upper,
-                map_to_target_space=args.liseco_map
+                map_to_target_space=args.liseco_map,
+                device=args.device
             )
         else:
             layerlist[layer] = LiSeCoWrapper(
@@ -135,7 +135,8 @@ def retrofit_model(Ws):
                 linear_probe=Ws[layer],
                 lower=args.liseco_lower,
                 upper=args.liseco_upper,
-                map_to_target_space=args.liseco_map
+                map_to_target_space=args.liseco_map,
+                device=args.device
             )
 
 
@@ -163,7 +164,6 @@ for i, datum in tqdm(enumerate(data)):
         layerlist[layer].reset_logs()
 
     # Generate output
-    print(data[i])
 
     try:
         if args.method == 'fudge':
@@ -172,7 +172,9 @@ for i, datum in tqdm(enumerate(data)):
             inputs=encoding['input_ids'], # batch size x seq len
             min_new_tokens=1,
             max_new_tokens=50,
-            do_sample=False,
+            do_sample=True,
+            temperature=0.7,
+            top_p=0.5,
             return_dict_in_generate=True,
             output_scores=True
         )
@@ -190,10 +192,12 @@ for i, datum in tqdm(enumerate(data)):
     results_dict[data[i]]['token'] = generated_tokens_text
     results_dict[data[i]]['surprisal'] = surprisals
 
+    print(f'Prompt:{data[i]}\nGenerated:{results_dict[data[i]]["generated_text"]}')
+
     # Semantic scores log:
     for layer in range(num_layers):
-        pre_adjust_scores = [float(score.item()) for score in layerlist[layer].pre_adjust_toxicity_log.copy()]
-        post_adjust_scores = [float(score.item()) for score in layerlist[layer].post_adjust_toxicity_log.copy()]
+        pre_adjust_scores = layerlist[layer].pre_adjust_toxicity_log.copy()
+        post_adjust_scores = layerlist[layer].post_adjust_toxicity_log.copy()
         latency = layerlist[layer].latency.copy()
         results_dict[data[i]][layer]['pre_adjust_toxicity_prob'] = pre_adjust_scores
         results_dict[data[i]][layer]['post_adjust_toxicity_prob'] = post_adjust_scores

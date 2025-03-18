@@ -15,14 +15,13 @@ from torcheval.metrics.functional import r2_score
 parser = argparse.ArgumentParser(description='Train probe')
 
 # Data selection
-parser.add_argument('--model_name', type=str, default="meta-llama/Llama-2-7b-hf")
+parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3-8B")
 parser.add_argument('--experiment', type=str, choices=['toxicity', 'sentiment', 'formality'])
 parser.add_argument('--objective', type=str, default='classification', choices=['regression', 'classification'])
 # parser.add_argument('--dataset_name', type=str, default='/home/echeng/llm-control/jigsaw-toxic-comment-classification-challenge')
-# parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--device', type=str, default='cuda')
 # parser.add_argument('--path_to_reps', type=str, default='/home/echeng/llm-control/experiments/toxicity/')
-parser.add_argument('--num_epochs', type=int, default=1000)
+parser.add_argument('--num_epochs', type=int, default=10000)
 parser.add_argument('--learning_rate', type=float, default=0.0001)
 parser.add_argument('--layer', type=int)
 parser.add_argument('--random_seed', type=int)
@@ -115,7 +114,7 @@ fpath = args.path_to_reps + f'saved_reps/{args.model_name.split("/")[-1]}_reps.p
 representations = torch.load(fpath)[args.layer]
 
 #### TRAIN
-num_epochs = 1000
+num_epochs = args.num_epochs
 learning_rate = 0.0001
 
 # Iterate over layers
@@ -146,6 +145,9 @@ train_labels = train_labels.float().unsqueeze(-1)
 val_labels = val_labels.float().unsqueeze(-1)
 
 # Training loop
+early_stop = False
+best_loss = float('inf')
+
 for epoch in range(num_epochs):
     linear_probe.train()
     optimizer.zero_grad()
@@ -162,13 +164,20 @@ for epoch in range(num_epochs):
     val_loss = 0
     correct = 0
     total = 0
+
     with torch.no_grad():
         outputs = linear_probe(val_features)
 
         val_loss = criterion(outputs, val_labels).float().item()
+
+        if len(losses) > 1000:
+            if val_loss > best_loss:
+                early_stop = True
+            else:
+                best_loss = val_loss
+
         losses.append(val_loss)
 
-        # print(val_loss)
         total = val_labels.size(0)
 
         if args.objective == 'classification':
@@ -196,14 +205,15 @@ for epoch in range(num_epochs):
             
             print(f'Epoch {epoch+1}/{num_epochs}, Validation Loss: {val_loss:.4f}, R2: {r2:.2f}')
 
+    if early_stop:
+        break
 
 # Save validation accuracy, metrics
+results = {'val_loss': losses, 'val_acc': accs, 'val_f1': f1s, 'val_r2': r2s}
 
-results = {'val_loss': losses, 'val_acc': accs, 'val_f1': f1s, 'val_r2': r2s, 'val_epoch': list(range(num_epochs))}
-
-with open(args.path_to_reps + f'/probing_results/{args.model_name.split("/")[-1]}_layer_{args.layer}_rs{args.random_seed}{f"_downsample_{args.downsample}" if args.downsample < 1 else ""}_validation_results_over_training.json', 'w') as f:
+with open(args.path_to_reps + f'probing_results/{args.model_name.split("/")[-1]}_layer_{args.layer}_rs{args.random_seed}{f"_downsample_{args.downsample}" if args.downsample < 1 else ""}_validation_results_over_training.json', 'w') as f:
     json.dump(results, f)
 
 # Save probe
 if args.save:
-    torch.save(linear_probe, f'{args.path_to_reps}/saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{args.layer}_rs{args.random_seed}{f"_downsample_{args.downsample}" if args.downsample < 1 else ""}.pt')
+    torch.save(linear_probe, f'{args.path_to_reps}saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{args.layer}_rs{args.random_seed}{f"_downsample_{args.downsample}" if args.downsample < 1 else ""}.pt')
