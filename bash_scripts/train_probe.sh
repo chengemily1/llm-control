@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=id_computation
-#SBATCH --partition=alien
+#SBATCH --job-name=probe_training
+#SBATCH --partition=high
 #SBATCH --qos=alien
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -19,4 +19,12 @@ source ~/.bashrc;
 conda activate control;
 cd /home/echeng/llm-control;
 
-python3 src/train_probe.py --model_name $MODEL --layer $LAYER --save 1
+python3 src/train_probe.py \
+        --model_name $MODEL \
+        --layer $LAYER \
+        --save 1 \
+        --config /home/echeng/llm-control/src/config.json \
+        --num_epochs 10000 \
+        --random_seed 0 \
+        --experiment sentiment \
+        --objective classification
