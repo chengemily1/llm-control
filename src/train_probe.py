@@ -25,7 +25,7 @@ parser.add_argument('--num_epochs', type=int, default=10000)
 parser.add_argument('--learning_rate', type=float, default=0.0001)
 parser.add_argument('--layer', type=int)
 parser.add_argument('--random_seed', type=int)
-parser.add_argument('--downsample', type=float, default=1)
+parser.add_argument('--downsample', type=float, default=0.1)
 parser.add_argument('--save', type=int, choices=[0,1], default=0, help='whether to save the probe')
 parser.add_argument('--config', type=str, help='/path/to/config.json')
 
