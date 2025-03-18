@@ -26,6 +26,7 @@ from src.utils.model_utils import (
 )
 from src.steering_methods.model_wrapper import (
     retrofit_model,
+    retrofit_model_multidim,
     collect_layer_metrics,
     print_intervention_summary
 )
@@ -106,7 +107,7 @@ def main():
         results_dict[datum] = {}
         
         # Setup model layers
-        retrofit_model(model, layerlist, Ws, args)
+        retrofit_model_multidim(model, layerlist, Ws, args)
         
         # Initialize layer-specific results
         num_layers = model.config.num_hidden_layers

@@ -10,15 +10,15 @@ from tqdm import tqdm
 
 class LinearProbe(nn.Module):
     """Linear probe that learns a hyperplane Wx-p=0."""
-    def __init__(self, input_dim, exp_config):
+    def __init__(self, input_dim, output_dim, exp_config):
         super().__init__()
-        self.linear = nn.Linear(input_dim, 1, bias=False)  # This is our W matrix
-        self.p = nn.Parameter(torch.randn(1))  # This is our learnable p value
+        self.linear = nn.Linear(input_dim, output_dim, bias=False)  # This is our W matrix
+        self.p = nn.Parameter(torch.randn(output_dim))  # This is our learnable p value
     
     def forward(self, x):
         return torch.matmul(x, self.linear.weight.t()).squeeze(-1)  # Returns Wx
     
-    def get_distance_to_hyperplane(self, x):
+    def get_distance_to_hyperplane(self, x): 
         """Get the signed distance from points to the hyperplane Wx-p=0."""
         Wx = self.forward(x)
         return Wx - self.p  # Distance is Wx-p
@@ -63,8 +63,7 @@ def train_probe(model, train_features, val_features, num_epochs=2000, learning_r
         train_distances = model.get_distance_to_hyperplane(train_features)
         
         # Direct distance minimization loss
-        # Use absolute distance to penalize both positive and negative distances
-        loss = torch.mean(torch.abs(train_distances))
+        loss = torch.norm(train_distances)
         
         # Add L2 regularization on W to prevent degenerate solutions
         W_norm = torch.norm(model.linear.weight)
@@ -77,7 +76,7 @@ def train_probe(model, train_features, val_features, num_epochs=2000, learning_r
         model.eval()
         with torch.no_grad():
             val_distances = model.get_distance_to_hyperplane(val_features)
-            val_loss = torch.mean(torch.abs(val_distances))
+            val_loss = torch.norm(val_distances)
             
             # Get statistics about W
             W = model.linear.weight
@@ -94,15 +93,15 @@ def train_probe(model, train_features, val_features, num_epochs=2000, learning_r
             
             # Count points that are "exactly" on hyperplane
             exact_threshold = 1e-6
-            points_on_hyperplane = torch.sum(torch.abs(train_distances) < exact_threshold).item()
-            total_points = train_distances.shape[0]
-            percent_on_hyperplane = 100 * points_on_hyperplane / total_points
+            # points_on_hyperplane = torch.sum(torch.abs(train_distances) < exact_threshold).item()
+            # total_points = train_distances.shape[0]
+            # percent_on_hyperplane = 100 * points_on_hyperplane / total_points
         
         # Store all metrics
         metrics['train_loss'].append(float(loss))
         metrics['val_loss'].append(float(val_loss))
         metrics['epoch'].append(epoch)
-        metrics['p_value'].append(float(model.p))
+        metrics['p_value'].append(model.p.detach().cpu().numpy().tolist())
         metrics['W_norm'].append(W_norm)
         metrics['W_stats'].append({
             'mean': W_mean,
@@ -113,17 +112,18 @@ def train_probe(model, train_features, val_features, num_epochs=2000, learning_r
         metrics['mean_distance'].append(mean_dist)
         metrics['max_distance'].append(max_dist)
         metrics['std_distance'].append(std_dist)
-        metrics['percent_on_hyperplane'].append(percent_on_hyperplane)
-        metrics['num_points_on_hyperplane'].append(points_on_hyperplane)
+        # metrics['percent_on_hyperplane'].append(percent_on_hyperplane)
+        # metrics['num_points_on_hyperplane'].append(points_on_hyperplane)
         
-        if (epoch + 1) % 100 == 0:
+        if (epoch + 1) % 10 == 0:
+            input()
             print(f'Epoch {epoch+1}/{num_epochs}')
             print(f'Loss: {loss:.8f}, Val Loss: {val_loss:.8f}')
             print(f'Mean Distance: {mean_dist:.8f}, Max Abs Distance: {max_dist:.8f}')
-            print(f'Std Distance: {std_dist:.8f}, p: {model.p.item():.8f}')
+            # print(f'Std Distance: {std_dist:.8f}, p: {model.p.detach().cpu().numpy().tolist()}')
             print(f'W norm: {W_norm:.8f}')
             print(f'W stats - mean: {W_mean:.8f}, std: {W_std:.8f}, min: {W_min:.8f}, max: {W_max:.8f}')
-            print(f'Points exactly on hyperplane: {points_on_hyperplane}/{total_points} ({percent_on_hyperplane:.2f}%)')
+            # print(f'Points exactly on hyperplane: {points_on_hyperplane}/{total_points} ({percent_on_hyperplane:.2f}%)')
     
     return model, metrics, train_features, val_features
 
@@ -159,7 +159,7 @@ def save_probe_results(metrics, model, config, output_dir, train_features=None, 
     # Save final model state and hyperplane parameters
     final_state = {
         'W': model.linear.weight.detach().cpu().numpy().tolist(),
-        'p': model.p.item(),
+        'p': model.p.detach().cpu().numpy().tolist(),
         'W_norm': torch.norm(model.linear.weight).item(),
         'final_metrics': {
             'train_loss': metrics['train_loss'][-1],

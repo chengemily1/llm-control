@@ -53,9 +53,6 @@ class LiSeCoBaseWrapper(torch.nn.Module):
         
         # Probe-related parameters
         self.probe = linear_probe.eval().half().to(device)
-        self.w = linear_probe.weight.detach().cpu().numpy().squeeze() # linear probe
-        self.B = linear_probe.bias.detach().cpu().numpy().squeeze()
-        self.w_norm = np.linalg.norm(self.w) # python float
 
         # Logging
         self.toxic_sequences = []
@@ -127,6 +124,11 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
         self.b = self.inverse_map(upper) 
         
         assert self.a < self.b # should work because the inverse is monotone
+
+        # Weights and bias
+        self.w = linear_probe.weight.detach().cpu().numpy().squeeze() # linear probe
+        self.B = linear_probe.bias.detach().cpu().numpy().squeeze()
+        self.w_norm = np.linalg.norm(self.w) # python float
 
 
     def eval_probe(self, x_seq, last_token_idx):
@@ -218,6 +220,107 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
         self.pre_adjust_toxicity_log = []
         self.post_adjust_toxicity_log = []
         self.latency = []
+
+
+# Linear control wrapper class
+class MultiDimLiSeCoWrapper(LiSeCoBaseWrapper):
+    def __init__(self, base_layer: nn.Module, 
+                 linear_probe: nn.Module, 
+                 tolerance: float = 0.01,
+                 name: Optional[str] = "LiSeCo",
+                 device: Optional[str] = 'cpu'
+                 ):
+        """Sets up a layer wrapper to constrain the score, as determined by the linear probe, to [lower, upper] in 
+        target space.
+
+        Args:
+            base_layer (nn.Module): original layer of the model.
+            linear_probe (nn.Module): in R^{dxk}, pre-trained linear module.
+            name (Optional[str], optional): name the layer. Defaults to "LiSeCo".
+        """
+        # This handles probe-related parameters
+        super(LiSeCoWrapper, self).__init__(base_layer, linear_probe, name=name, device=device)
+
+        # Weights and bias
+        self.W1 = linear_probe.linear.weight.detach().cpu().numpy().squeeze() # linear probe
+        self.W2T = - self.W1.T @ np.linalg.inv(self.W1 @ self.W1.T)
+        self.P = linear_probe.p.detach().cpu().numpy().squeeze()
+        self.eps = tolerance
+
+
+    def eval_probe(self, last_token_rep):
+        # Get the last token representation
+        return torch.norm(self.probe.get_distance_to_hyperplane(last_token_rep))
+
+    def forward(self, x, *args, **kwargs):
+        t = time.time()
+        x_seq, x_metadata = self.base_layer(x, *args, **kwargs)
+
+        # Add the toxicity score to the log
+        if 'position_ids' in kwargs:
+            last_token_idx = kwargs['position_ids'].cpu().size(1) - 1
+        else:
+            last_token_idx = x_seq.size(1) - 1
+            
+        # Store the tensor result
+        last_token_rep = x_seq[torch.arange(x_seq.size(0)), last_token_idx]
+        self.pre_adjust_toxicity_log.append(self.eval_probe(last_token_rep))
+        
+        if self.control: # Make the adjustment
+            # Get optimal theta and ensure it's on the same device
+            theta = self.optimal_theta(last_token_rep)
+            if theta.device != x_seq.device:
+                theta = theta.to(x_seq.device)
+            # Apply the adjustment
+            x_seq[torch.arange(x_seq.size(0)), last_token_idx] += theta
+
+        # Add to toxicity log
+        new_last_token_rep = x_seq[torch.arange(x_seq.size(0)), last_token_idx]
+        self.post_adjust_toxicity_log.append(self.eval_probe(new_last_token_rep))
+        self.latency.append(time.time() - t)
+        return x_seq, x_metadata
+
+    def optimal_theta(self, x):
+        """Finds the optimal steering vector. Warning: ONLY WORKS FOR BATCH SIZE=1
+
+        Args:
+            x (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        theta = torch.zeros(x.shape, device=self.device, dtype=torch.float16)  # Create with half precision
+        x = x.detach().cpu().numpy()
+
+        # Classified as toxic when w.T x < a or w.T x > b.
+        dist_to_hyperplane = self.eval_probe(x).detach().cpu().numpy()
+        toxic_sequences_idx = np.where(dist_to_hyperplane > self.eps)
+        self.toxic_sequences.append(toxic_sequences_idx)
+
+        # No intervention needed case
+        if not len(toxic_sequences_idx[0]): 
+            return theta
+
+        # intervention needed
+        x_toxic = x[toxic_sequences_idx] # index into the toxic ones only
+
+        # Upper intervention needed
+        if len(x_toxic):
+            theta[toxic_sequences_idx] = torch.tensor(
+                self.W2T @ (self.W1 @ x_toxic + self.P),
+                device=self.device,
+                dtype=torch.float16
+            )
+
+        return theta
+
+    def reset_logs(self):
+        self.toxic_sequences = []
+        self.pre_adjust_toxicity_log = []
+        self.post_adjust_toxicity_log = []
+        self.latency = []
+
+
 
 
 if __name__ == "__main__":

@@ -40,6 +40,7 @@ def parse_arguments():
                        help='Override default random seed')
     parser.add_argument('--downsample', type=float,
                        help='Override default downsample ratio')
+    parser.add_argument('--output_dim', type=int)
     
     # Other arguments
     parser.add_argument('--save', type=int, choices=[0,1], default=0,
@@ -90,7 +91,7 @@ def main():
     
     # Initialize model
     input_dim = representations[0].shape[-1]
-    model = LinearProbe(input_dim=input_dim, exp_config=exp_config).to(device)
+    model = LinearProbe(input_dim=input_dim, output_dim=args.output_dim, exp_config=exp_config).to(device)
     
     # Train model
     model, metrics, train_features, val_features = train_probe(

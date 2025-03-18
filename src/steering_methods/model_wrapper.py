@@ -53,6 +53,23 @@ def retrofit_model(model, layerlist, Ws, args):
                 map_to_target_space=args.liseco_map
             )
 
+def retrofit_model_multidim(model, layerlist, Ws, args):
+    """Wrap all layers of the model with appropriate wrappers."""
+    num_layers = model.config.num_hidden_layers
+    for layer in range(num_layers):
+        if type(layerlist[layer]) != LiSeCoBaseWrapper:
+            layerlist[layer] = MultiDimLiSeCoWrapper(
+                layerlist[layer],
+                linear_probe=Ws[layer],
+                device=args.device
+            )
+        else:
+            layerlist[layer] = MultiDimLiSeCoWrapper(
+                layerlist[layer].base_layer,
+                linear_probe=Ws[layer],
+                device=args.device
+            )
+
 def collect_layer_metrics(layerlist, layer):
     """Collect metrics from a specific layer."""
     return {
