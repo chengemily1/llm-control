@@ -63,16 +63,19 @@ def main():
     model, tokenizer = setup_model_and_tokenizer(args.model_name, config['access_token'], args.device)
     
     # Get layers to control
-    if args.layers is None:
-        print("\nNo layers specified, selecting layers based on R² scores...")
-        selected_layers = get_layers_by_r2(args.model_name, config['base_path'], args.r2_threshold)
-        if not selected_layers:
-            print("No layers found with sufficient R² scores. Please specify layers manually.")
-            return
-    else:
-        selected_layers = args.layers
-        print(f"\nUsing manually specified layers: {selected_layers}")
-    
+    # if args.layers is None:
+    #     print("\nNo layers specified, selecting layers based on R² scores...")
+    #     selected_layers = get_layers_by_r2(args.model_name, config['base_path'], args.r2_threshold)
+    #     if not selected_layers:
+    #         print("No layers found with sufficient R² scores. Please specify layers manually.")
+    #         return
+    # else:
+    #     selected_layers = args.layers
+    #     print(f"\nUsing manually specified layers: {selected_layers}")
+    # for now
+    selected_layers = list(range(model.config.num_hidden_layers))
+
+
     # Print intervention summary
     liseco_params = {
         'liseco_lower': args.liseco_lower,
