@@ -9,6 +9,8 @@ import ast
 import torch
 from tqdm import tqdm
 
+NA_VALUE = "N/A"
+
 # Set up logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -85,7 +87,7 @@ def extract_persona_features(df: pd.DataFrame) -> pd.DataFrame:
     result_df = pd.concat([df.reset_index(drop=True), features_df], axis=1)
 
     # Fill in any "nan" with "N/A"
-    result_df = result_df.fillna("N/A")
+    result_df = result_df.fillna(NA_VALUE)
 
     return result_df
 
@@ -154,6 +156,12 @@ def extract_persona_representations(
         )
     )
 
+    # Get all possible persona feature keys from the DataFrame
+    all_persona_keys = [
+        col for col in df.columns if col.startswith("persona_") and col != "persona_idx"
+    ]
+    logger.info(f"Found {len(all_persona_keys)} unique persona feature keys")
+
     # Verify the mapping
     logger.info("Persona to index mapping:")
     for persona_str, idx in list(persona_to_idx.items())[:3]:
@@ -185,9 +193,9 @@ def extract_persona_representations(
         all_feature_embeddings = []
 
         # Process each feature
-        for feature_key, feature_value in persona_dict.items():
+        for feature_key in all_persona_keys:
             # Create a descriptive text for this feature
-            feature_text = f"{feature_key}: {feature_value}"
+            feature_text = f"{feature_key}: {persona_dict[feature_key] if feature_key in persona_dict else NA_VALUE}"
 
             # Get representation for this feature from the specified layer
             rep = get_persona_representation(
