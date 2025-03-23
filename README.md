@@ -50,4 +50,7 @@ python results/llm_as_judge.py --user child
 ```
 # Save representations
 python src/probe_training/save_reps.py --experiment persona
+
+# Save persona features
+python src/probe_training/save_reps.py --experiment persona --extract_persona_features
 ```

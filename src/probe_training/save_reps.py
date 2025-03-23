@@ -60,7 +60,43 @@ def parse_arguments():
     parser.add_argument(
         "--config", default="src/config.json", help="Path to config file"
     )
+
+    # JL 3/23/25: for persona features
+    parser.add_argument(
+        "--extract_persona_features",
+        action="store_true",
+        help="Extract representations for persona features",
+    )
     return parser.parse_args()
+
+
+def extract_persona_features_reps(exp_config, config):
+    """Extract and save representations for persona features."""
+    from src.utils.dataset_utils_persona import extract_persona_representations
+
+    # Get paths
+    paths = exp_config.get_paths(config["base_path"])
+
+    # Load processed dataset
+    dataset = pd.read_csv(paths["data"]["processed"])
+
+    # Setup model and tokenizer
+    model, tokenizer = setup_model_and_tokenizer(
+        exp_config.model_name, config["access_token"], exp_config.device
+    )
+
+    # Extract and save persona feature representations from the final layer
+    print("Extracting persona feature representations from final layer...")
+    extract_persona_representations(
+        model,
+        tokenizer,
+        dataset,
+        paths["representations"]["base"],
+        exp_config.model_name,
+        exp_config.device,
+        layer_idx=-1,  # Explicitly specify final layer
+    )
+    print("Persona feature representations extraction complete")
 
 
 def main():
@@ -85,11 +121,17 @@ def main():
     # Load configuration
     config = load_config(args.config)
 
+    # If extracting persona features, do that and exit
+    if args.extract_persona_features and args.experiment == "persona":
+        extract_persona_features_reps(exp_config, config)
+        return
+
     # Get paths
     paths = exp_config.get_paths(config["base_path"])
 
     # Process dataset if needed
-    if not os.path.exists(paths["data"]["processed"]):
+    # if not os.path.exists(paths["data"]["processed"]):
+    if True:
         if exp_config.get_experiment_name() == "elix":
             process_elix_dataset(
                 exp_config.user,
@@ -114,6 +156,7 @@ def main():
         else:
             raise ValueError(f"Invalid experiment type: {args.experiment}")
 
+    """
     # Load processed dataset
     dataset = pd.read_csv(paths["data"]["processed"])
     data = list(dataset[exp_config.text_field])
@@ -151,6 +194,7 @@ def main():
         paths["representations"]["base"],
         exp_config.model_name,
     )
+    """
 
 
 if __name__ == "__main__":
