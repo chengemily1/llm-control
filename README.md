@@ -53,4 +53,23 @@ python src/probe_training/save_reps.py --experiment persona
 
 # Save persona features
 python src/probe_training/save_reps.py --experiment persona --extract_persona_features
+
+# Train contrastive model
+python src/contrastive/train_contrastive.py --experiment persona
+```
+
+How to control with persona features?
+```
+w_{persona} \in \mathbb{R}^{4096*num_features}
+w_{qa} \in \mathbb{R}^{4096}
+
+f_{persona}(w_{persona})
+f_{qa}(w_{qa})
+
+f_{qa} = W
+
+f_{qa}(w_{qa}) = W * w_{qa} \in \mathbb{R}^{4096}
+
+# Cosine similarity:
+f_{persona}(w_{persona})^T f_{qa}(w_{qa}) = f_{persona}(w_{persona})^T W w_{qa} \in \mathbb{R} >= c
 ```
