@@ -55,7 +55,11 @@ python src/probe_training/save_reps.py --experiment persona
 python src/probe_training/save_reps.py --experiment persona --extract_persona_features
 
 # Train contrastive model
-python src/contrastive/train_contrastive.py --experiment persona
+CUDA_VISIBLE_DEVICES=0 python src/contrastive/train_contrastive.py --experiment persona
+
+# Debug contrastive model: set persona and qa to one-hot vectors
+CUDA_VISIBLE_DEVICES=1 python src/contrastive/train_contrastive.py --experiment persona --debug_persona
+CUDA_VISIBLE_DEVICES=2 python src/contrastive/train_contrastive.py --experiment persona --debug_qa
 ```
 
 How to control with persona features?

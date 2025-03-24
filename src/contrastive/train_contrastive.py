@@ -26,6 +26,8 @@ class PersonaDataset(Dataset):
         qa_reps_path,
         layer_idx=-1,
         length=5000,
+        debug_persona=False,
+        debug_qa=False,
     ):
         """
         Initialize the dataset.
@@ -33,19 +35,22 @@ class PersonaDataset(Dataset):
         Args:
             csv_path (str): Path to the CSV file with persona data
             persona_features_path (str): Path to the persona features embeddings
-            qa_reps_path (str): Path to the question-answer representations
+            qa_reps_path (str): Path to the question-answer representations (base path)
             layer_idx (int): Layer index to use for QA representations
             length (int): Number of samples to use
         """
         self.df = pd.read_csv(csv_path)
         self.df = self.df.head(length)
         self.persona_features = torch.load(persona_features_path)
+        self.layer_idx = layer_idx
 
-        # Load QA representations
-        self.qa_reps = torch.load(qa_reps_path)
-        if isinstance(self.qa_reps, list):
-            # If qa_reps is a list of tensors (one per layer), select the specified layer
-            self.qa_reps = self.qa_reps[layer_idx]
+        # JL 3/24/25 debugging:
+        self.debug_persona = debug_persona
+        self.debug_qa = debug_qa
+
+        # Load QA representations from multiple files
+        self.qa_reps = {}
+        self.load_qa_representations(qa_reps_path, length)
 
         # Verify that we have the necessary columns
         required_cols = ["persona_idx", "instruction+data"]
@@ -71,6 +76,71 @@ class PersonaDataset(Dataset):
             )
             print(f"Missing persona_idx values: {list(missing_personas)[:5]}...")
 
+    def load_qa_representations(self, base_path, length):
+        """
+        Load QA representations from multiple files.
+
+        Args:
+            base_path (str): Base path to the QA representation files
+            length (int): Total number of samples to load
+        """
+        # Extract the base directory and filename pattern
+        base_dir = os.path.dirname(base_path)
+        filename_pattern = os.path.basename(base_path)
+
+        # Extract the model name and part from the pattern
+        # Assuming format like "Meta-Llama-3-8B_reps_part_5000.pt"
+        parts = filename_pattern.split("_")
+        model_name = "_".join(parts[:-2])  # Everything before "_part_5000.pt"
+
+        # Calculate how many files we need to load
+        samples_per_file = int(parts[-1].split(".")[0])  # Extract "5000" from "5000.pt"
+        num_files_needed = (
+            length + samples_per_file - 1
+        ) // samples_per_file  # Ceiling division
+
+        print(
+            f"Loading {num_files_needed} QA representation files for {length} samples"
+        )
+
+        # Load each file
+        current_samples = 0
+        for i in range(1, num_files_needed + 1):
+            file_samples = min(samples_per_file, length - current_samples)
+            if file_samples <= 0:
+                break
+
+            file_path = os.path.join(
+                base_dir, f"{model_name}_part_{i * samples_per_file}.pt"
+            )
+
+            # Check if the file exists
+            if not os.path.exists(file_path):
+                print(
+                    f"Warning: File {file_path} not found. Trying alternative naming."
+                )
+                # Try alternative naming (e.g., "final" instead of a number)
+                if i == num_files_needed:
+                    file_path = os.path.join(base_dir, f"{model_name}_part_final.pt")
+                    if not os.path.exists(file_path):
+                        print(f"Warning: File {file_path} not found. Skipping.")
+                        continue
+
+            print(f"Loading QA representations from {file_path}")
+            file_reps = torch.load(file_path)
+
+            # If file_reps is a list (one tensor per layer), select the specified layer
+            if isinstance(file_reps, list):
+                file_reps = file_reps[self.layer_idx]
+
+            # Add to our dictionary with adjusted indices
+            for j in range(file_samples):
+                self.qa_reps[current_samples + j] = file_reps[j]
+
+            current_samples += file_samples
+
+        print(f"Loaded QA representations for {current_samples} samples")
+
     def __len__(self):
         return len(self.df)
 
@@ -84,21 +154,30 @@ class PersonaDataset(Dataset):
         # Get the persona_idx for this row
         persona_idx = self.row_to_persona_idx[idx]
 
-        # Get the persona features embedding, shape [num_features, embed_dim]
-        try:
-            persona_embedding = self.persona_features[persona_idx]["data"]
-        except KeyError:
-            # If persona_idx not found, use a random persona as fallback
-            random_persona_idx = list(self.persona_features.keys())[0]
-            persona_embedding = self.persona_features[random_persona_idx]["data"]
-            print(
-                f"Warning: persona_idx {persona_idx} not found, using random persona {random_persona_idx}"
-            )
-        # Convert from shape [num_features, embed_dim] to shape [num_features * embed_dim]
-        persona_embedding = persona_embedding.view(-1)
+        if self.debug_persona:
+            # JL 3/24/25 debugging:
+            persona_embedding = torch.zeros(4096)
+            persona_embedding[persona_idx] = 1
+        else:
+            # Get the persona features embedding, shape [num_features, embed_dim]
+            try:
+                persona_embedding = self.persona_features[persona_idx]["data"]
+            except KeyError:
+                # If persona_idx not found, use a random persona as fallback
+                random_persona_idx = list(self.persona_features.keys())[0]
+                persona_embedding = self.persona_features[random_persona_idx]["data"]
+                print(
+                    f"Warning: persona_idx {persona_idx} not found, using random persona {random_persona_idx}"
+                )
+            # Convert from shape [num_features, embed_dim] to shape [embed_dim] by summing over the features
+            persona_embedding = persona_embedding.sum(dim=0)
 
         # Get the QA representation, shape [embed_dim]
-        qa_embedding = self.qa_reps[idx]
+        if self.debug_qa:
+            qa_embedding = torch.zeros(4096)
+            qa_embedding[persona_idx] = 1
+        else:
+            qa_embedding = self.qa_reps[idx]
 
         return persona_embedding, qa_embedding, persona_idx
 
@@ -162,13 +241,10 @@ def contrastive_loss(persona_embeds, qa_embeds, persona_idx, temperature=0.1):
         temperature (float): Temperature parameter for softmax
 
     Returns:
-        torch.Tensor: Contrastive loss, defined as:
-        loss = -torch.sum(labels * F.log_softmax(similarity, dim=1)) / len(persona_idx)
+        torch.Tensor: Contrastive loss
     """
     # Compute similarity matrix
-    similarity = torch.matmul(
-        qa_embeds, persona_embeds.transpose(0, 1)
-    )  # [batch_size, batch_size] # TODO JL check if this is correct
+    similarity = torch.matmul(qa_embeds, persona_embeds.transpose(0, 1))
     similarity = similarity / temperature
 
     # Create labels: diagonal elements should be 1 (positive pairs)
@@ -180,10 +256,13 @@ def contrastive_loss(persona_embeds, qa_embeds, persona_idx, temperature=0.1):
                 labels[i, j] = 1
 
     # Normalize labels to sum to 1 for each row
-    labels = labels / labels.sum(dim=1, keepdim=True)
+    row_sums = labels.sum(dim=1, keepdim=True)
+    row_sums[row_sums == 0] = 1  # Avoid division by zero
+    labels = labels / row_sums
 
     # Compute cross-entropy loss
-    loss = -torch.sum(labels * F.log_softmax(similarity, dim=1)) / len(persona_idx)
+    log_softmax = F.log_softmax(similarity, dim=1)
+    loss = -torch.sum(labels * log_softmax) / len(persona_idx)
 
     return loss
 
@@ -195,6 +274,13 @@ def train_persona_contrastive(args):
     Args:
         args: Command-line arguments
     """
+
+    # JL 3/24/25 debugging:
+    if args.debug_persona:
+        args.output_dir = args.output_dir + "_debug_persona"
+    if args.debug_qa:
+        args.output_dir = args.output_dir + "_debug_qa"
+
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -205,13 +291,16 @@ def train_persona_contrastive(args):
         persona_features_path=args.persona_features,
         qa_reps_path=args.qa_reps,
         layer_idx=args.layer_idx,
+        length=args.max_samples,
+        debug_persona=args.debug_persona,
+        debug_qa=args.debug_qa,
     )
 
     # Split into train and validation sets
     train_size = int(0.8 * len(dataset))
     val_size = len(dataset) - train_size
     train_dataset, val_dataset = torch.utils.data.random_split(
-        dataset, [train_size, val_size]
+        dataset, [train_size, val_size], generator=torch.Generator().manual_seed(42)
     )
 
     train_loader = DataLoader(
@@ -253,13 +342,22 @@ def train_persona_contrastive(args):
     optimizer = Adam(
         list(persona_model.parameters()) + list(qa_model.parameters()),
         lr=args.learning_rate,
+        weight_decay=args.weight_decay,
+    )
+
+    # Create learning rate scheduler
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode="min", factor=0.5, patience=5, verbose=True
     )
 
     # Training loop
     best_val_loss = float("inf")
     train_losses = []
     val_losses = []
+    train_accuracies = []
     val_accuracies = []
+    train_f1s = []
+    val_f1s = []
 
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
@@ -269,6 +367,8 @@ def train_persona_contrastive(args):
         persona_model.train()
         qa_model.train()
         train_loss = 0.0
+        train_all_preds = []
+        train_all_labels = []
 
         for persona_embeds, qa_embeds, persona_idx in tqdm(
             train_loader, desc=f"Epoch {epoch+1}/{args.num_epochs}"
@@ -278,51 +378,33 @@ def train_persona_contrastive(args):
             persona_idx = persona_idx.to(device=device, dtype=torch.int64)
 
             # Forward pass
-            persona_embeds = persona_model(persona_embeds)
-            qa_embeds = qa_model(qa_embeds)
+            persona_embeds_out = persona_model(persona_embeds)
+            qa_embeds_out = qa_model(qa_embeds)
 
             # Compute loss
             loss = contrastive_loss(
-                persona_embeds, qa_embeds, persona_idx, args.temperature
+                persona_embeds_out, qa_embeds_out, persona_idx, args.temperature
             )
 
             # Backward pass and optimize
             optimizer.zero_grad()
             loss.backward()
+
+            # Gradient clipping to prevent exploding gradients
+            torch.nn.utils.clip_grad_norm_(
+                list(persona_model.parameters()) + list(qa_model.parameters()),
+                max_norm=1.0,
+            )
+
             optimizer.step()
 
             train_loss += loss.item()
 
-        train_loss /= len(train_loader)
-        train_losses.append(train_loss)
-
-        # Validation
-        persona_model.eval()
-        qa_model.eval()
-        val_loss = 0.0
-        all_preds = []
-        all_labels = []
-
-        with torch.no_grad():
-            for persona_embeds, qa_embeds, persona_idx in tqdm(
-                val_loader, desc="Validation"
-            ):
-                persona_embeds = persona_embeds.to(device=device, dtype=torch.float32)
-                qa_embeds = qa_embeds.to(device=device, dtype=torch.float32)
-                persona_idx = persona_idx.to(device=device, dtype=torch.int64)
-
-                # Forward pass
-                persona_embeds = persona_model(persona_embeds)
-                qa_embeds = qa_model(qa_embeds)
-
-                # Compute loss
-                loss = contrastive_loss(
-                    persona_embeds, qa_embeds, persona_idx, args.temperature
+            # Compute similarity matrix for training metrics
+            with torch.no_grad():
+                similarity = torch.matmul(
+                    qa_embeds_out, persona_embeds_out.transpose(0, 1)
                 )
-                val_loss += loss.item()
-
-                # Compute similarity matrix
-                similarity = torch.matmul(qa_embeds, persona_embeds.transpose(0, 1))
 
                 # Get predictions (index of highest similarity for each QA embedding)
                 preds = torch.argmax(similarity, dim=1).cpu().numpy()
@@ -338,36 +420,116 @@ def train_persona_contrastive(args):
                         # If no match found, use -1 (will be ignored in metrics)
                         labels.append(-1)
 
-                all_preds.extend(preds)
-                all_labels.extend(labels)
+                train_all_preds.extend(preds)
+                train_all_labels.extend(labels)
+
+        train_loss /= len(train_loader)
+        train_losses.append(train_loss)
+
+        # Compute training metrics
+        train_valid_indices = [
+            i for i, label in enumerate(train_all_labels) if label != -1
+        ]
+        if train_valid_indices:
+            train_valid_preds = [train_all_preds[i] for i in train_valid_indices]
+            train_valid_labels = [train_all_labels[i] for i in train_valid_indices]
+            train_accuracy = accuracy_score(train_valid_labels, train_valid_preds)
+            train_precision, train_recall, train_f1, _ = (
+                precision_recall_fscore_support(
+                    train_valid_labels,
+                    train_valid_preds,
+                    average="weighted",
+                    zero_division=0,
+                )
+            )
+        else:
+            train_accuracy = train_precision = train_recall = train_f1 = 0.0
+
+        train_accuracies.append(train_accuracy)
+        train_f1s.append(train_f1)
+
+        # Validation
+        persona_model.eval()
+        qa_model.eval()
+        val_loss = 0.0
+        val_all_preds = []
+        val_all_labels = []
+
+        with torch.no_grad():
+            for persona_embeds, qa_embeds, persona_idx in tqdm(
+                val_loader, desc="Validation"
+            ):
+                persona_embeds = persona_embeds.to(device=device, dtype=torch.float32)
+                qa_embeds = qa_embeds.to(device=device, dtype=torch.float32)
+                persona_idx = persona_idx.to(device=device, dtype=torch.int64)
+
+                # Forward pass
+                persona_embeds_out = persona_model(persona_embeds)
+                qa_embeds_out = qa_model(qa_embeds)
+
+                # Compute loss
+                loss = contrastive_loss(
+                    persona_embeds_out, qa_embeds_out, persona_idx, args.temperature
+                )
+                val_loss += loss.item()
+
+                # Compute similarity matrix
+                similarity = torch.matmul(
+                    qa_embeds_out, persona_embeds_out.transpose(0, 1)
+                )
+
+                # Get predictions (index of highest similarity for each QA embedding)
+                preds = torch.argmax(similarity, dim=1).cpu().numpy()
+
+                # Create labels: for each QA embedding, find the index of its persona in the batch
+                labels = []
+                for i, idx in enumerate(persona_idx.cpu().numpy()):
+                    matches = persona_idx.cpu().numpy() == idx
+                    if np.any(matches):
+                        # Use the first matching persona as the label
+                        labels.append(np.where(matches)[0][0])
+                    else:
+                        # If no match found, use -1 (will be ignored in metrics)
+                        labels.append(-1)
+
+                val_all_preds.extend(preds)
+                val_all_labels.extend(labels)
 
         val_loss /= len(val_loader)
         val_losses.append(val_loss)
 
-        # Compute accuracy (ignoring -1 labels)
-        valid_indices = [i for i, label in enumerate(all_labels) if label != -1]
-        if valid_indices:
-            valid_preds = [all_preds[i] for i in valid_indices]
-            valid_labels = [all_labels[i] for i in valid_indices]
-            accuracy = accuracy_score(valid_labels, valid_preds)
-            precision, recall, f1, _ = precision_recall_fscore_support(
-                valid_labels, valid_preds, average="weighted"
+        # Update learning rate based on validation loss
+        scheduler.step(val_loss)
+
+        # Compute validation metrics
+        val_valid_indices = [i for i, label in enumerate(val_all_labels) if label != -1]
+        if val_valid_indices:
+            val_valid_preds = [val_all_preds[i] for i in val_valid_indices]
+            val_valid_labels = [val_all_labels[i] for i in val_valid_indices]
+            val_accuracy = accuracy_score(val_valid_labels, val_valid_preds)
+            val_precision, val_recall, val_f1, _ = precision_recall_fscore_support(
+                val_valid_labels, val_valid_preds, average="weighted", zero_division=0
             )
         else:
-            accuracy = 0.0
-            precision = recall = f1 = 0.0
+            val_accuracy = val_precision = val_recall = val_f1 = 0.0
 
-        val_accuracies.append(accuracy)
+        val_accuracies.append(val_accuracy)
+        val_f1s.append(val_f1)
 
+        # Calculate random baseline for comparison
+        num_unique_personas = len(np.unique(persona_idx.cpu().numpy()))
+        random_baseline = 1.0 / num_unique_personas if num_unique_personas > 0 else 0
+
+        # Print metrics
+        print(f"Epoch {epoch+1}/{args.num_epochs}")
+        print(f"  Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
         print(
-            f"Epoch {epoch+1}/{args.num_epochs}, "
-            f"Train Loss: {train_loss:.4f}, "
-            f"Val Loss: {val_loss:.4f}, "
-            f"Accuracy: {accuracy:.4f}, "
-            f"Precision: {precision:.4f}, "
-            f"Recall: {recall:.4f}, "
-            f"F1: {f1:.4f}"
+            f"  Train Metrics: Acc={train_accuracy:.4f}, P={train_precision:.4f}, R={train_recall:.4f}, F1={train_f1:.4f}"
         )
+        print(
+            f"  Val Metrics: Acc={val_accuracy:.4f}, P={val_precision:.4f}, R={val_recall:.4f}, F1={val_f1:.4f}"
+        )
+        print(f"  Random Baseline Accuracy: {random_baseline:.4f}")
 
         # Save best model
         if val_loss < best_val_loss:
@@ -379,11 +541,12 @@ def train_persona_contrastive(args):
                     "optimizer": optimizer.state_dict(),
                     "epoch": epoch,
                     "val_loss": val_loss,
-                    "accuracy": accuracy,
+                    "val_accuracy": val_accuracy,
+                    "val_f1": val_f1,
                 },
                 os.path.join(args.output_dir, "best_model.pt"),
             )
-            print(f"Saved best model with val_loss: {val_loss:.4f}")
+            print(f"  Saved best model with val_loss: {val_loss:.4f}")
 
     # Save final model
     torch.save(
@@ -393,15 +556,16 @@ def train_persona_contrastive(args):
             "optimizer": optimizer.state_dict(),
             "epoch": args.num_epochs - 1,
             "val_loss": val_loss,
-            "accuracy": accuracy,
+            "val_accuracy": val_accuracy,
+            "val_f1": val_f1,
         },
         os.path.join(args.output_dir, "final_model.pt"),
     )
 
     # Plot training curves
-    plt.figure(figsize=(12, 4))
+    plt.figure(figsize=(15, 10))
 
-    plt.subplot(1, 2, 1)
+    plt.subplot(2, 2, 1)
     plt.plot(train_losses, label="Train Loss")
     plt.plot(val_losses, label="Val Loss")
     plt.xlabel("Epoch")
@@ -409,12 +573,34 @@ def train_persona_contrastive(args):
     plt.legend()
     plt.title("Training and Validation Loss")
 
-    plt.subplot(1, 2, 2)
-    plt.plot(val_accuracies, label="Accuracy")
+    plt.subplot(2, 2, 2)
+    plt.plot(train_accuracies, label="Train Accuracy")
+    plt.plot(val_accuracies, label="Val Accuracy")
+    plt.axhline(y=random_baseline, color="r", linestyle="--", label="Random Baseline")
     plt.xlabel("Epoch")
     plt.ylabel("Accuracy")
     plt.legend()
-    plt.title("Validation Accuracy")
+    plt.title("Training and Validation Accuracy")
+
+    plt.subplot(2, 2, 3)
+    plt.plot(train_f1s, label="Train F1")
+    plt.plot(val_f1s, label="Val F1")
+    plt.xlabel("Epoch")
+    plt.ylabel("F1 Score")
+    plt.legend()
+    plt.title("Training and Validation F1 Score")
+
+    plt.subplot(2, 2, 4)
+    current_lr = optimizer.param_groups[0]["lr"]
+    plt.text(
+        0.5,
+        0.5,
+        f"Final Learning Rate: {current_lr:.6f}",
+        horizontalalignment="center",
+        verticalalignment="center",
+        fontsize=12,
+    )
+    plt.axis("off")
 
     plt.tight_layout()
     plt.savefig(os.path.join(args.output_dir, "training_curves.png"))
@@ -495,10 +681,10 @@ if __name__ == "__main__":
 
     # Model parameters
     parser.add_argument(
-        "--hidden_dim", type=int, default=512, help="Hidden dimension of models"
+        "--hidden_dim", type=int, default=1024, help="Hidden dimension of models"
     )
     parser.add_argument(
-        "--embed_dim", type=int, default=256, help="Output embedding dimension"
+        "--embed_dim", type=int, default=1024, help="Output embedding dimension"
     )
     parser.add_argument(
         "--layer_idx",
@@ -510,7 +696,13 @@ if __name__ == "__main__":
     # Training parameters
     parser.add_argument("--batch_size", type=int, default=64, help="Batch size")
     parser.add_argument(
-        "--learning_rate", type=float, default=0.001, help="Learning rate"
+        "--learning_rate", type=float, default=0.0001, help="Learning rate"
+    )
+    parser.add_argument(
+        "--weight_decay",
+        type=float,
+        default=1e-5,
+        help="Weight decay for regularization",
     )
     parser.add_argument("--num_epochs", type=int, default=50, help="Number of epochs")
     parser.add_argument(
@@ -528,10 +720,19 @@ if __name__ == "__main__":
         help="Output directory",
     )
 
+    parser.add_argument(
+        "--max_samples",
+        type=int,
+        default=100000,
+        help="Maximum number of samples to use",
+    )
+
     # Debug
     parser.add_argument(
         "--test_data", action="store_true", help="Run data test and exit"
     )
+    parser.add_argument("--debug_persona", action="store_true", help="Debug persona")
+    parser.add_argument("--debug_qa", action="store_true", help="Debug QA")
 
     args = parser.parse_args()
 
