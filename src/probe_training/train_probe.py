@@ -43,7 +43,7 @@ def parse_arguments():
     parser.add_argument('--output_dim', type=int)
     
     # Other arguments
-    parser.add_argument('--save', type=int, choices=[0,1], default=0,
+    parser.add_argument('--save', type=int, choices=[0,1], default=1,
                        help='Whether to save the probe')
     parser.add_argument('--config', default='src/config.json',
                        help='Path to config file')

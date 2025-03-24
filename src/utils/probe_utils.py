@@ -50,7 +50,7 @@ def train_probe(model, train_features, val_features, num_epochs=2000, learning_r
         'train_loss': [], 'val_loss': [], 'epoch': [], 
         'p_value': [], 'W_norm': [], 'W_stats': [],
         'mean_distance': [], 'max_distance': [], 'std_distance': [],
-        'percent_on_hyperplane': [], 'num_points_on_hyperplane': []
+        # 'percent_on_hyperplane': [], 'num_points_on_hyperplane': []
     }
     
     # Training loop
@@ -116,7 +116,7 @@ def train_probe(model, train_features, val_features, num_epochs=2000, learning_r
         # metrics['num_points_on_hyperplane'].append(points_on_hyperplane)
         
         if (epoch + 1) % 10 == 0:
-            input()
+            # input()
             print(f'Epoch {epoch+1}/{num_epochs}')
             print(f'Loss: {loss:.8f}, Val Loss: {val_loss:.8f}')
             print(f'Mean Distance: {mean_dist:.8f}, Max Abs Distance: {max_dist:.8f}')
@@ -167,8 +167,8 @@ def save_probe_results(metrics, model, config, output_dir, train_features=None, 
             'mean_distance': metrics['mean_distance'][-1],
             'max_distance': metrics['max_distance'][-1],
             'std_distance': metrics['std_distance'][-1],
-            'percent_on_hyperplane': metrics['percent_on_hyperplane'][-1],
-            'num_points_on_hyperplane': metrics['num_points_on_hyperplane'][-1]
+            # 'percent_on_hyperplane': metrics['percent_on_hyperplane'][-1],
+            # 'num_points_on_hyperplane': metrics['num_points_on_hyperplane'][-1]
         }
     }
     

@@ -239,7 +239,7 @@ class MultiDimLiSeCoWrapper(LiSeCoBaseWrapper):
             name (Optional[str], optional): name the layer. Defaults to "LiSeCo".
         """
         # This handles probe-related parameters
-        super(LiSeCoWrapper, self).__init__(base_layer, linear_probe, name=name, device=device)
+        super(MultiDimLiSeCoWrapper, self).__init__(base_layer, linear_probe, name=name, device=device)
 
         # Weights and bias
         self.W1 = linear_probe.linear.weight.detach().cpu().numpy().squeeze() # linear probe

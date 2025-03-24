@@ -1,6 +1,7 @@
 import os
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
+import pdb
 
 def setup_model_and_tokenizer(model_name, access_token, device):
     """Set up and configure the model and tokenizer."""
@@ -40,13 +41,15 @@ def load_probes(model, args, your_path):
     for layer in range(1, num_layers + 1):
         probe_path = os.path.join(
             your_path,
-            'experiments/elix/saved_probes',
-            f'{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}_rs42.pt'
-        )
+            'experiments/gms8k/saved_probes',
+            f'{args.model_name.split("/")[-1]}_layer_{layer}_rs42_probe.pt'
+        ) 
         
         print(f"Looking for probe at: {probe_path}")
         try:
-            W = torch.load(probe_path).to(args.device)
+            W = torch.load(probe_path) 
+            for k in W.keys():
+                W[k] = W[k].to(args.device) 
             Ws.append(W)
             W.eval()
         except Exception as e:
@@ -77,7 +80,7 @@ def get_layers_by_r2(model_name: str, base_path: str, r2_threshold: float = 0.5)
     model_short_name = model_name.split('/')[-1]
     
     # Find all probe result files for this model
-    results_path = os.path.join(base_path, 'experiments/elix/probing_results')
+    results_path = os.path.join(base_path, 'experiments/gms8k/probing_results')
     pattern = os.path.join(results_path, f"{model_short_name}_layer_*_validation_results_over_training.json")
     result_files = glob.glob(pattern)
     

@@ -1,4 +1,4 @@
-from src.steering_methods.control_wrapper import LiSeCoWrapper
+from src.steering_methods.control_wrapper import LiSeCoWrapper, MultiDimLiSeCoWrapper
 
 def print_intervention_summary(model_name: str, method: str, selected_layers: list, 
                              liseco_params: dict = None) -> None:
@@ -57,7 +57,7 @@ def retrofit_model_multidim(model, layerlist, Ws, args):
     """Wrap all layers of the model with appropriate wrappers."""
     num_layers = model.config.num_hidden_layers
     for layer in range(num_layers):
-        if type(layerlist[layer]) != LiSeCoBaseWrapper:
+        if type(layerlist[layer]) != MultiDimLiSeCoWrapper:
             layerlist[layer] = MultiDimLiSeCoWrapper(
                 layerlist[layer],
                 linear_probe=Ws[layer],
