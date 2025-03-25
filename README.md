@@ -60,6 +60,7 @@ CUDA_VISIBLE_DEVICES=0 python src/contrastive/train_contrastive.py --experiment 
 # Debug contrastive model: set persona and qa to one-hot vectors
 CUDA_VISIBLE_DEVICES=1 python src/contrastive/train_contrastive.py --experiment persona --debug_persona
 CUDA_VISIBLE_DEVICES=2 python src/contrastive/train_contrastive.py --experiment persona --debug_qa
+CUDA_VISIBLE_DEVICES=3 python src/contrastive/train_contrastive.py --experiment persona --debug_persona --debug_qa
 ```
 
 How to control with persona features?
