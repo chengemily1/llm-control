@@ -91,11 +91,6 @@ def train_probe(model, train_features, val_features, num_epochs=2000, learning_r
             max_dist = torch.max(torch.abs(train_distances)).item()
             std_dist = torch.std(train_distances).item()
             
-            # Count points that are "exactly" on hyperplane
-            exact_threshold = 1e-6
-            # points_on_hyperplane = torch.sum(torch.abs(train_distances) < exact_threshold).item()
-            # total_points = train_distances.shape[0]
-            # percent_on_hyperplane = 100 * points_on_hyperplane / total_points
         
         # Store all metrics
         metrics['train_loss'].append(float(loss))
@@ -167,8 +162,6 @@ def save_probe_results(metrics, model, config, output_dir, train_features=None, 
             'mean_distance': metrics['mean_distance'][-1],
             'max_distance': metrics['max_distance'][-1],
             'std_distance': metrics['std_distance'][-1],
-            # 'percent_on_hyperplane': metrics['percent_on_hyperplane'][-1],
-            # 'num_points_on_hyperplane': metrics['num_points_on_hyperplane'][-1]
         }
     }
     
@@ -181,7 +174,7 @@ def save_probe_results(metrics, model, config, output_dir, train_features=None, 
     
     # Save model
     model_file = os.path.join(probes_dir, f"{base_name}_probe.pt")
-    torch.save(model.state_dict(), model_file)  # Save state dict instead of full model
+    torch.save(model, model_file)  
     print(f"Saved probe model to {model_file}")
     
     # Save representations if provided

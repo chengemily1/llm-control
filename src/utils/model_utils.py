@@ -48,10 +48,8 @@ def load_probes(model, args, your_path):
         print(f"Looking for probe at: {probe_path}")
         try:
             W = torch.load(probe_path) 
-            for k in W.keys():
-                W[k] = W[k].to(args.device) 
-            Ws.append(W)
             W.eval()
+            Ws.append(W)
         except Exception as e:
             print(f"Error loading probe: {e}")
     

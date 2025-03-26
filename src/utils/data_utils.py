@@ -68,11 +68,17 @@ def encode_data(tokenizer, N, data, batch_size, max_length, device):
     
     return encodings
 
-def load_and_process_dataset():
+def load_and_process_dataset(experiment_name):
     """Load and preprocess the dataset."""
-    test_dataset = load_dataset("Asap7772/elix_generations_gpt4omini_pref")
-    dataset = pd.DataFrame(test_dataset['test'])
-    text_field = 'prompt'
+    if experiment_name == 'elix':
+        test_dataset = load_dataset("Asap7772/elix_generations_gpt4omini_pref")
+        dataset = pd.DataFrame(test_dataset['test'])
+        text_field = 'prompt'
+    elif experiment_name == 'gms8k':
+        test_dataset = load_dataset("openai/gsm8k", 'main')
+        dataset = pd.DataFrame(test_dataset['test'])
+        text_field = 'question'
+
 
     # Drop duplicates and format as question-answer pairs
     dataset = dataset.drop_duplicates(subset=[text_field])

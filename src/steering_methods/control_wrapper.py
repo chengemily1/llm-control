@@ -242,9 +242,14 @@ class MultiDimLiSeCoWrapper(LiSeCoBaseWrapper):
         super(MultiDimLiSeCoWrapper, self).__init__(base_layer, linear_probe, name=name, device=device)
 
         # Weights and bias
-        self.W1 = linear_probe.linear.weight.detach().cpu().numpy().squeeze() # linear probe
-        self.W2T = - self.W1.T @ np.linalg.inv(self.W1 @ self.W1.T)
-        self.P = linear_probe.p.detach().cpu().numpy().squeeze()
+        # print('check what linear probe is')
+        self.W1 = linear_probe.linear.weight.detach().to(torch.float) #.cpu().numpy().squeeze().astype(np.float32) # linear probe
+        self.W2T = - torch.mm(self.W1.t(), torch.linalg.inv(torch.mm(self.W1, self.W1.t()))).detach() #- self.W1.T @ np.linalg.inv(self.W1 @ self.W1.T)
+        
+        # compatibility with dtype of x
+        self.W1 = self.W1.half()
+        self.W2T = self.W2T.half()
+        self.P = linear_probe.p.detach().half()#.cpu().numpy().squeeze().astype(np.float32)
         self.eps = tolerance
 
 
@@ -290,11 +295,11 @@ class MultiDimLiSeCoWrapper(LiSeCoBaseWrapper):
             _type_: _description_
         """
         theta = torch.zeros(x.shape, device=self.device, dtype=torch.float16)  # Create with half precision
-        x = x.detach().cpu().numpy()
+        x = x.detach()#.cpu().numpy()
 
         # Classified as toxic when w.T x < a or w.T x > b.
-        dist_to_hyperplane = self.eval_probe(x).detach().cpu().numpy()
-        toxic_sequences_idx = np.where(dist_to_hyperplane > self.eps)
+        dist_to_hyperplane = self.eval_probe(x).detach()#.cpu().numpy()
+        toxic_sequences_idx = torch.where(dist_to_hyperplane > self.eps)
         self.toxic_sequences.append(toxic_sequences_idx)
 
         # No intervention needed case
@@ -305,12 +310,13 @@ class MultiDimLiSeCoWrapper(LiSeCoBaseWrapper):
         x_toxic = x[toxic_sequences_idx] # index into the toxic ones only
 
         # Upper intervention needed
-        if len(x_toxic):
-            theta[toxic_sequences_idx] = torch.tensor(
-                self.W2T @ (self.W1 @ x_toxic + self.P),
-                device=self.device,
-                dtype=torch.float16
-            )
+        if len(x_toxic):            
+            theta[toxic_sequences_idx] = torch.mm(torch.mm(x_toxic, self.W1.t()) + self.P, self.W2T.t())
+            # torch.tensor(
+            #     self.W2T @ (self.W1 @ x_toxic + self.P),
+            #     device=self.device,
+            #     dtype=torch.float16
+            # )
 
         return theta
 

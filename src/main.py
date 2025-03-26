@@ -6,6 +6,7 @@ import argparse
 import torch
 import random
 from tqdm import tqdm
+import pdb
 
 # Add the parent directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -73,7 +74,7 @@ def main():
     #     selected_layers = args.layers
     #     print(f"\nUsing manually specified layers: {selected_layers}")
     # for now
-    selected_layers = list(range(model.config.num_hidden_layers))
+    selected_layers = [i for i in range(model.config.num_hidden_layers)][:-1]
 
 
     # Print intervention summary
@@ -94,9 +95,11 @@ def main():
     # Load probes and get layer list
     Ws = load_probes(model, args, config['base_path'])
     layerlist = get_layer_list(model, args.model_name)
+    # print('check layerlist')
+    # pdb.set_trace()
     
     # Load and process dataset
-    data = load_and_process_dataset()
+    data = load_and_process_dataset(args.experiment)
     
     # Initialize results dictionary
     results_dict = {}
