@@ -24,8 +24,8 @@ parser = argparse.ArgumentParser(description='training proof-of-concept')
 
 # Data selection
 parser.add_argument('--experiment', type=str, default='toxicity')
-parser.add_argument('--model_name', type=str, default="meta-llama/Llama-2-7b-hf")
-parser.add_argument('--method', default='baseline', choices=['baseline', 'ours', 'actadd', 'instruct', 'fudge'])
+parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3-8B")
+parser.add_argument('--method', default='ours', choices=['baseline', 'ours', 'actadd', 'instruct', 'fudge'])
 parser.add_argument('--layers', metavar='N', type=int, nargs='+',
                         help='an integer or a list of integers')
 parser.add_argument('--device', type=str, default='cuda')
@@ -35,7 +35,7 @@ parser.add_argument('--liseco_map', default='sigmoid', choices=['sigmoid', 'tanh
 parser.add_argument('--c', help="Actadd intervention strength", type=float, default=3)
 parser.add_argument('--l', default=6, type=int)
 parser.add_argument('--s', default=None, type=float)
-parser.add_argument('--config', default='src/config.json', help='path to config file')
+parser.add_argument('--config', default='config.json', help='path to config file')
 args = parser.parse_args()
 
 exp = 'sentiment' if args.experiment in ('formality', 'sentiment') else 'toxicity' # reuse the sentiment prompts for formlaity
@@ -73,7 +73,7 @@ num_layers = model.config.num_hidden_layers
 
 Ws = [
     torch.load(
-        f'{YOUR_PATH}/experiments/{args.experiment}/saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}{"_rs0" if args.experiment in ("formality", "sentiment") else ""}.pt'
+        f'{YOUR_PATH}/experiments/{args.experiment}/saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}{"_rs0_downsample_0.1" if args.experiment in ("formality", "sentiment") else ""}.pt'
         ).to(args.device)
     for layer in range(1, num_layers+1)
 ]

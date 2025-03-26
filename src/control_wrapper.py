@@ -123,8 +123,7 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
 
     def eval_probe(self, x_seq, last_token_idx):
         eval_result = self.probe(x_seq[torch.arange(x_seq.size(0)),last_token_idx])
-
-        return self.forward_map(eval_result.squeeze()).detach().cpu().numpy().item() # this is the score in target space
+        return self.forward_map(eval_result.squeeze()).detach().cpu().numpy() # this is the score in target space
 
     def forward(self, x, *args, **kwargs):
         t = time.time()
@@ -135,8 +134,11 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
             last_token_idx = kwargs['position_ids'].cpu().size(1) - 1
         else:
             last_token_idx = x_seq.size(1) - 1
-            
-        self.pre_adjust_toxicity_log.append(self.eval_probe(x_seq, last_token_idx))
+        
+        score = self.eval_probe(x_seq, last_token_idx)
+        print(score)
+        breakpoint()
+        self.pre_adjust_toxicity_log.append(score)
         
         if self.control: # Make the adjustment
             theta = self.optimal_theta(
@@ -237,7 +239,7 @@ if __name__ == "__main__":
     for LAYER in LAYERS:
         layerlist[LAYER-1] = LiSeCoWrapper(
                     layerlist[LAYER-1],
-                    linear_probe=Ws[LAYER - 12],
+                    linear_probe=Ws[LAYER - 1],
                     lower=LOWER,
                     upper=UPPER,
                     map_to_target_space=map,
