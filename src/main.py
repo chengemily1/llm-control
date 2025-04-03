@@ -10,6 +10,7 @@ import numpy as np
 from tqdm import tqdm
 import pdb
 import random
+import os
 from sklearn.metrics import f1_score
 
 from control_wrapper import LiSeCoWrapper
@@ -80,7 +81,7 @@ Ws = [
 [W.eval() for W in Ws]
 
 # Load the dataset
-dataset = pd.read_csv(args.dataset_name)
+dataset = pd.read_csv(args.dataset_name).head(100)
 text_field = 'prompt'
 data = list(dataset[text_field])
 
@@ -209,6 +210,10 @@ if args.method == 'actadd':
 if args.method == 'fudge':
     results_dict['overall_latency'] = lm_head.latency
 
+if not os.path.exists(f'{YOUR_PATH}/experiments/{args.experiment}/control_results/'):
+    os.makedirs(f'{YOUR_PATH}/experiments/{args.experiment}/control_results/')
 
-with open(f'{YOUR_PATH}/experiments/{args.experiment}/control_results/{args.model_name.split("/")[-1]}_p_{args.p}_{args.method}.json', 'w') as f:
+print(results_dict)
+    
+with open(f'{YOUR_PATH}/experiments/{args.experiment}/control_results/{args.model_name.split("/")[-1]}_low_{args.liseco_lower}_high_{args.liseco_upper}_{args.method}_downsample_0.1.json', 'w') as f:
     json.dump(results_dict, f)

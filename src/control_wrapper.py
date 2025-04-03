@@ -136,9 +136,9 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
             last_token_idx = x_seq.size(1) - 1
         
         score = self.eval_probe(x_seq, last_token_idx)
-        print(score)
-        breakpoint()
-        self.pre_adjust_toxicity_log.append(score)
+        # print(score)
+        # breakpoint()
+        self.pre_adjust_toxicity_log.append(score.item())
         
         if self.control: # Make the adjustment
             theta = self.optimal_theta(
@@ -147,7 +147,7 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
             x_seq[torch.arange(x_seq.size(0)),last_token_idx] += theta
 
         # Add to toxicity log
-        self.post_adjust_toxicity_log.append(self.eval_probe(x_seq, last_token_idx)) # this is the probscore
+        self.post_adjust_toxicity_log.append(self.eval_probe(x_seq, last_token_idx).item()) # this is the probscore
         self.latency.append(time.time() - t)
         return x_seq, x_metadata
 
