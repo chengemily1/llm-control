@@ -6,6 +6,8 @@ import json
 from transformers import pipeline
 import pdb
 
+from utils.results_utils import load_results_json
+
 def parse_args():
     parser = argparse.ArgumentParser(description='training proof-of-concept')
 
@@ -79,8 +81,7 @@ if __name__ == "__main__":
     print(args)
 
     # Load the dataset
-    with open('/home/echeng/llm-control/experiments/sentiment/control_results/Meta-Llama-3-8B_low_0.0_high_0.3_ours_downsample_0.1.json', 'r') as f:
-        generations = json.load(f)
+    generations = load_results_json(args)
 
     generations = [generations[gen]['generated_text'] for gen in generations]
 
@@ -91,5 +92,7 @@ if __name__ == "__main__":
     print(np.mean(scores))
     print(np.std(scores))
     print('done')
+
+    # TODO: save the scores
 
 

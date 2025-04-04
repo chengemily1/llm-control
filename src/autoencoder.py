@@ -5,8 +5,15 @@ import pdb
 
 
 class AutoencoderWithLogisticRegression(nn.Module):
-    def __init__(self, input_dim, latent_dim):
+    def __init__(self, input_dim, latent_dim, objective, tradeoff = 0.5):
         super(AutoencoderWithLogisticRegression, self).__init__()
+
+        self.tradeoff = tradeoff
+
+        if objective == 'classification':
+            self.criterion = nn.BCEWithLogitsLoss(reduction='mean')
+        elif objective == 'regression':
+            self.criterion = nn.MSELoss(reduction='mean')
         
         # Encoder
         self.encoder = nn.Sequential(
@@ -31,3 +38,12 @@ class AutoencoderWithLogisticRegression(nn.Module):
         x_recon = self.decoder(z)
         y_pred = torch.sigmoid(self.classifier(z))
         return x_recon, y_pred
+    
+    def reconstruction_loss(self, x, x_recon):
+        return nn.functional.mse_loss(x, x_recon)
+    
+    def task_loss(self, y_pred, y_true):
+        return self.criterion(y_pred, y_true)
+    
+    def total_loss(self, x, x_recon, y_pred, y_true):
+        return self.tradeoff * self.reconstruction_loss(x, x_recon) + (1 - self.tradeoff) * self.task_loss(y_pred, y_true)

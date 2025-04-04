@@ -128,15 +128,10 @@ if args.downsample < 1:
 
 # Define linear probe
 pretrained_model_output_dim = representations[10].shape[-1] # take a random layer e.g. layer 10 and get the output dim
-autoencoder = AutoencoderWithLogisticRegression(pretrained_model_output_dim, 10000)
+autoencoder = AutoencoderWithLogisticRegression(pretrained_model_output_dim, 10000, args.objective)
 
-# Define loss function and optimizer
-if args.objective == 'classification':
-    criterion = nn.BCEWithLogitsLoss(reduction='mean')
-elif args.objective == 'regression':
-    criterion = nn.MSELoss(reduction='mean')
-
-optimizer = torch.optim.Adam(linear_probe.parameters(), lr=learning_rate)
+# Define optimizer
+optimizer = torch.optim.Adam(autoencoder.parameters(), lr=learning_rate)
 
 accs, f1s, r2s, losses = [], [], [], []
 
@@ -149,39 +144,44 @@ early_stop = False
 best_loss = float('inf')
 
 for epoch in range(num_epochs):
-    linear_probe.train()
+    autoencoder.train()
     optimizer.zero_grad()
-    outputs = linear_probe(train_features)
-    loss = criterion(outputs, train_labels)
+    x_recon, y_pred = autoencoder(train_features)
 
+    # Compute loss
+    recon_loss = autoencoder.reconstruction_loss(train_features, x_recon)
+    task_loss = autoencoder.task_loss(y_pred, train_labels)
+    total_loss = autoencoder.tradeoff * recon_loss + (1 - autoencoder.tradeoff) * task_loss
 
     # Backward pass
-    loss.backward()
+    total_loss.backward()
     optimizer.step()
 
     # Validation
-    linear_probe.eval()
+    autoencoder.eval()
     val_loss = 0
     correct = 0
     total = 0
 
     with torch.no_grad():
-        outputs = linear_probe(val_features)
+        x_recon, y_pred = autoencoder(val_features)
 
-        val_loss = criterion(outputs, val_labels).float().item()
+        recon_loss = autoencoder.reconstruction_loss(val_features, x_recon)
+        task_loss = autoencoder.task_loss(y_pred, val_labels)
+        total_loss = autoencoder.tradeoff * recon_loss + (1 - autoencoder.tradeoff) * task_loss
 
         if len(losses) > 1000:
-            if val_loss > best_loss:
+            if total_loss > best_loss:
                 early_stop = True
             else:
-                best_loss = val_loss
+                best_loss = total_loss
 
         losses.append(val_loss)
 
         total = val_labels.size(0)
 
         if args.objective == 'classification':
-            predicted = (nn.functional.sigmoid(outputs) > 0.5).long().float() # convert to 0s and 1s
+            predicted = (nn.functional.sigmoid(y_pred) > 0.5).long().float() # convert to 0s and 1s
             # print('predicted vs val labels')
             # pdb.set_trace()
             correct = predicted.eq(val_labels).sum().item()
@@ -193,7 +193,7 @@ for epoch in range(num_epochs):
             f1s.append(f1)
             accs.append(accuracy)
 
-            print(f'Epoch {epoch+1}/{num_epochs}, Validation Loss: {val_loss:.4f}, Accuracy: {accuracy:.2f}%, F1: {f1:.2f}')
+            print(f'Epoch {epoch+1}/{num_epochs}, Validation Loss: {val_loss:.4f}, Recon Loss: {recon_loss:.4f}, Task Loss: {task_loss:.4f}, Total Loss: {total_loss:.4f}, Accuracy: {accuracy:.2f}%, F1: {f1:.2f}')
 
         elif args.objective == 'regression':
             # predicted = None 
@@ -216,4 +216,4 @@ with open(args.path_to_reps + f'probing_results/{args.model_name.split("/")[-1]}
 
 # Save probe
 if args.save:
-    torch.save(linear_probe, f'{args.path_to_reps}saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{args.layer}_rs{args.random_seed}{f"_downsample_{args.downsample}" if args.downsample < 1 else ""}.pt')
+    torch.save(autoencoder, f'{args.path_to_reps}saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{args.layer}_rs{args.random_seed}{f"_downsample_{args.downsample}" if args.downsample < 1 else ""}.pt')
