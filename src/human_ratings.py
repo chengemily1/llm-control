@@ -13,11 +13,9 @@ def parse_args():
     parser = argparse.ArgumentParser(description='training proof-of-concept')
 
     # Data selection
-    parser.add_argument('--experiment', type=str, default='sentiment')
+    parser.add_argument('--experiment', type=str, default='toxicity')
     parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3-8B")
     parser.add_argument('--method', default='ours', choices=['baseline', 'ours', 'actadd', 'instruct', 'fudge'])
-    parser.add_argument('--layers', metavar='N', type=int, nargs='+',
-                            help='an integer or a list of integers')
     parser.add_argument('--liseco_lower', type=float, default=0.0)
     parser.add_argument('--liseco_upper', type=float, default=0.3)
     parser.add_argument('--liseco_map', default='sigmoid', choices=['sigmoid', 'tanh', 'identity'])

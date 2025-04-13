@@ -20,12 +20,11 @@ parser.add_argument('--experiment', type=str, choices=['toxicity', 'sentiment', 
 parser.add_argument('--objective', type=str, default='classification', choices=['regression', 'classification'])
 # parser.add_argument('--dataset_name', type=str, default='/home/echeng/llm-control/jigsaw-toxic-comment-classification-challenge')
 parser.add_argument('--device', type=str, default='cuda')
-# parser.add_argument('--path_to_reps', type=str, default='/home/echeng/llm-control/experiments/toxicity/')
 parser.add_argument('--num_epochs', type=int, default=10000)
 parser.add_argument('--learning_rate', type=float, default=0.0001)
 parser.add_argument('--layer', type=int)
 parser.add_argument('--random_seed', type=int)
-parser.add_argument('--downsample', type=float, default=0.1)
+parser.add_argument('--downsample', type=float, default=1.0)
 parser.add_argument('--save', type=int, choices=[0,1], default=0, help='whether to save the probe')
 parser.add_argument('--config', type=str, help='/path/to/config.json')
 
@@ -126,7 +125,7 @@ if args.downsample < 1:
 
 # Define linear probe
 pretrained_model_output_dim = representations[10].shape[-1] # take a random layer e.g. layer 10 and get the output dim
-linear_probe = nn.Linear(pretrained_model_output_dim, 1)  # Output dim of pre-trained model -> R 
+linear_probe = nn.Linear(pretrained_model_output_dim, 1)  # Output dim of pre-trained model -> R
 linear_probe.to(device)
 print(linear_probe)
 
@@ -196,13 +195,13 @@ for epoch in range(num_epochs):
             print(f'Epoch {epoch+1}/{num_epochs}, Validation Loss: {val_loss:.4f}, Accuracy: {accuracy:.2f}%, F1: {f1:.2f}')
 
         elif args.objective == 'regression':
-            # predicted = None 
+            # predicted = None
             # binary_val = (val_labels[:,0] < 0.5).long()
             # match = (binary_val.eq(predicted)).sum().item()
             # correct += match
             r2 = r2_score(outputs, val_labels).float().item()
             r2s.append(r2)
-            
+
             print(f'Epoch {epoch+1}/{num_epochs}, Validation Loss: {val_loss:.4f}, R2: {r2:.2f}')
 
     if early_stop:

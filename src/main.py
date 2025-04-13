@@ -74,7 +74,7 @@ num_layers = model.config.num_hidden_layers
 
 Ws = [
     torch.load(
-        f'{YOUR_PATH}/experiments/{args.experiment}/saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}{"_rs0_downsample_0.1" if args.experiment in ("formality", "sentiment") else ""}.pt'
+        f'{YOUR_PATH}/experiments/{args.experiment}/saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}_rs0{"_downsample_0.1" if args.experiment in ("formality", "sentiment") else ""}.pt'
         ).to(args.device)
     for layer in range(1, num_layers+1)
 ]
@@ -172,10 +172,11 @@ for i, datum in tqdm(enumerate(data)):
         outputs = model.generate(
             inputs=encoding['input_ids'], # batch size x seq len
             min_new_tokens=1,
-            max_new_tokens=50,
+            max_new_tokens=100,
             do_sample=True,
-            temperature=0.7,
-            top_p=0.5,
+            temperature=1.0,
+            top_p=0.3,
+            repetition_penalty=1.2,
             return_dict_in_generate=True,
             output_scores=True
         )
@@ -214,6 +215,6 @@ if not os.path.exists(f'{YOUR_PATH}/experiments/{args.experiment}/control_result
     os.makedirs(f'{YOUR_PATH}/experiments/{args.experiment}/control_results/')
 
 print(results_dict)
-    
+
 with open(f'{YOUR_PATH}/experiments/{args.experiment}/control_results/{args.model_name.split("/")[-1]}_low_{args.liseco_lower}_high_{args.liseco_upper}_{args.method}_downsample_0.1.json', 'w') as f:
     json.dump(results_dict, f)

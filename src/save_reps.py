@@ -8,21 +8,27 @@ import numpy as np
 from tqdm import tqdm
 import os
 import pdb
-from config import YOUR_PATH, YOUR_TOKEN
 
 parser = argparse.ArgumentParser(description='ID computation')
 
 # Data selection
 parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3-8B")
-parser.add_argument('--dataset_name', type=str, default='/home/camoalon/Projects/llm-control/sentiment-constraint-set')
+parser.add_argument('--dataset_name', type=str, default='/home/echeng/llm-control/jigsaw-toxic-comment-classification-challenge')
 parser.add_argument('--attn', type=int, default=0)
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--device', type=str, default='cuda')
 parser.add_argument('--experiment', default='sentiment')
+parser.add_argument('--config', type=str, default='/home/echeng/llm-control/src/config.json')
+
 args = parser.parse_args()
 print(args)
 
-ACCESS_TOKEN= YOUR_TOKEN
+### CONFIG and LOADING
+with open(args.config, 'r') as f:
+    CONFIG = json.load(f)
+
+ACCESS_TOKEN = CONFIG['hf_access_token']
+YOUR_PATH = CONFIG['path']
 
 # Load the model and tokenizer
 tokenizer = AutoTokenizer.from_pretrained(args.model_name, 

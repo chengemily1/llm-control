@@ -29,7 +29,7 @@ parser.add_argument('--layer', type=int)
 parser.add_argument('--random_seed', type=int)
 parser.add_argument('--downsample', type=float, default=0.1)
 parser.add_argument('--save', type=int, choices=[0,1], default=0, help='whether to save the probe')
-parser.add_argument('--config', type=str, help='src/config.json')
+parser.add_argument('--config', type=str, help='/home/echeng/llm-control/src/config.json')
 
 args = parser.parse_args()
 print(args)
@@ -129,6 +129,7 @@ if args.downsample < 1:
 # Define linear probe
 pretrained_model_output_dim = representations[10].shape[-1] # take a random layer e.g. layer 10 and get the output dim
 autoencoder = AutoencoderWithLogisticRegression(pretrained_model_output_dim, 10000, args.objective)
+autoencoder.to(device)
 
 # Define optimizer
 optimizer = torch.optim.Adam(autoencoder.parameters(), lr=learning_rate)
@@ -143,7 +144,7 @@ val_labels = val_labels.float().unsqueeze(-1)
 early_stop = False
 best_loss = float('inf')
 
-for epoch in range(num_epochs):
+for epoch in tqdm(range(num_epochs)):
     autoencoder.train()
     optimizer.zero_grad()
     x_recon, y_pred = autoencoder(train_features)
@@ -163,47 +164,48 @@ for epoch in range(num_epochs):
     correct = 0
     total = 0
 
-    with torch.no_grad():
-        x_recon, y_pred = autoencoder(val_features)
+    if epoch % 10 == 0:
+        with torch.no_grad():
+            x_recon, y_pred = autoencoder(val_features)
 
-        recon_loss = autoencoder.reconstruction_loss(val_features, x_recon)
-        task_loss = autoencoder.task_loss(y_pred, val_labels)
-        total_loss = autoencoder.tradeoff * recon_loss + (1 - autoencoder.tradeoff) * task_loss
+            val_recon_loss = autoencoder.reconstruction_loss(val_features, x_recon)
+            val_task_loss = autoencoder.task_loss(y_pred, val_labels)
+            val_total_loss = autoencoder.tradeoff * val_recon_loss + (1 - autoencoder.tradeoff) * val_task_loss
 
-        if len(losses) > 1000:
-            if total_loss > best_loss:
-                early_stop = True
-            else:
-                best_loss = total_loss
+            if len(losses) > 1000:
+                if val_total_loss > best_loss:
+                    early_stop = True
+                else:
+                    best_loss = val_total_loss
 
-        losses.append(val_loss)
+            losses.append(val_total_loss)
 
-        total = val_labels.size(0)
+            total = val_labels.size(0)
 
-        if args.objective == 'classification':
-            predicted = (nn.functional.sigmoid(y_pred) > 0.5).long().float() # convert to 0s and 1s
-            # print('predicted vs val labels')
-            # pdb.set_trace()
-            correct = predicted.eq(val_labels).sum().item()
-            binary_val = val_labels
+            if args.objective == 'classification':
+                predicted = (nn.functional.sigmoid(y_pred) > 0.5).long().float() # convert to 0s and 1s
+                # print('predicted vs val labels')
+                # pdb.set_trace()
+                correct = predicted.eq(val_labels).sum().item()
+                binary_val = val_labels
 
-            accuracy = 100. * correct / total
-            # pdb.set_trace()
-            f1 = f1_score(binary_val.cpu(), predicted.cpu())
-            f1s.append(f1)
-            accs.append(accuracy)
+                accuracy = 100. * correct / total
+                # pdb.set_trace()
+                f1 = f1_score(binary_val.cpu(), predicted.cpu())
+                f1s.append(f1)
+                accs.append(accuracy)
 
-            print(f'Epoch {epoch+1}/{num_epochs}, Validation Loss: {val_loss:.4f}, Recon Loss: {recon_loss:.4f}, Task Loss: {task_loss:.4f}, Total Loss: {total_loss:.4f}, Accuracy: {accuracy:.2f}%, F1: {f1:.2f}')
+                print(f'Epoch {epoch+1}/{num_epochs}, Recon Loss: {val_recon_loss:.4f}, Task Loss: {val_task_loss:.4f}, Total Loss: {val_total_loss:.4f}, Accuracy: {accuracy:.2f}%, F1: {f1:.2f}')
 
-        elif args.objective == 'regression':
-            # predicted = None 
-            # binary_val = (val_labels[:,0] < 0.5).long()
-            # match = (binary_val.eq(predicted)).sum().item()
-            # correct += match
-            r2 = r2_score(outputs, val_labels).float().item()
-            r2s.append(r2)
-            
-            print(f'Epoch {epoch+1}/{num_epochs}, Validation Loss: {val_loss:.4f}, R2: {r2:.2f}')
+            elif args.objective == 'regression':
+                # predicted = None 
+                # binary_val = (val_labels[:,0] < 0.5).long()
+                # match = (binary_val.eq(predicted)).sum().item()
+                # correct += match
+                r2 = r2_score(outputs, val_labels).float().item()
+                r2s.append(r2)
+                
+                print(f'Epoch {epoch+1}/{num_epochs}, Validation Loss: {val_loss:.4f}, R2: {r2:.2f}')
 
     if early_stop:
         break
@@ -216,4 +218,4 @@ with open(args.path_to_reps + f'probing_results/{args.model_name.split("/")[-1]}
 
 # Save probe
 if args.save:
-    torch.save(autoencoder, f'{args.path_to_reps}saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{args.layer}_rs{args.random_seed}{f"_downsample_{args.downsample}" if args.downsample < 1 else ""}.pt')
+    torch.save(autoencoder, f'{args.path_to_reps}saved_probes/{args.model_name.split("/")[-1]}_autoencoder_probe_layer_{args.layer}_rs{args.random_seed}{f"_downsample_{args.downsample}" if args.downsample < 1 else ""}.pt')

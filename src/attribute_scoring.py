@@ -6,7 +6,7 @@ import json
 from transformers import pipeline
 import pdb
 
-from utils.results_utils import load_results_json
+from utils.results_utils import load_generations
 
 def parse_args():
     parser = argparse.ArgumentParser(description='training proof-of-concept')
@@ -14,9 +14,7 @@ def parse_args():
     # Data selection
     parser.add_argument('--experiment', type=str, default='toxicity')
     parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3-8B")
-    parser.add_argument('--method', default='ours', choices=['baseline', 'ours', 'actadd', 'instruct', 'fudge'])
-    parser.add_argument('--layers', metavar='N', type=int, nargs='+',
-                            help='an integer or a list of integers')
+    parser.add_argument('--method', default='ours', choices=['baseline', 'ours', 'act', 'actadd', 'instruct', 'fudge'])
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--liseco_lower', type=float, default=0.0)
     parser.add_argument('--liseco_upper', type=float, default=0.3)
@@ -29,11 +27,6 @@ def parse_args():
 
     return args
 
-def load_generations(args):
-    """
-        Load the generations from the dataset
-    """
-    return # TODO
 
 def get_scorer(args):
     """
@@ -81,18 +74,19 @@ if __name__ == "__main__":
     print(args)
 
     # Load the dataset
-    generations = load_results_json(args)
-
-    generations = [generations[gen]['generated_text'] for gen in generations]
+    generations, all_generations = load_generations(args)
 
     # Load the pipeline / scorer
     print('scoring...')
     scores = score_text(args, generations, binary=False)
 
-    print(np.mean(scores))
-    print(np.std(scores))
-    print('done')
+    all_generations['p_toxic'] = scores
+    pdb.set_trace()
 
-    # TODO: save the scores
+    print(all_generations.groupby('strength').agg({'p_toxic': [np.mean, np.std]}))
+
+    # Save the scores
+    all_generations.to_csv('act_toxicity_scores.csv')
+
 
 
