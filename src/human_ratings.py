@@ -7,7 +7,7 @@ import json
 from transformers import pipeline
 import pdb
 import random
-from utils.results_utils import load_results_json
+from utils.results_utils import load_generations
 
 def parse_args():
     parser = argparse.ArgumentParser(description='training proof-of-concept')
@@ -15,7 +15,7 @@ def parse_args():
     # Data selection
     parser.add_argument('--experiment', type=str, default='toxicity')
     parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3-8B")
-    parser.add_argument('--method', default='ours', choices=['baseline', 'ours', 'actadd', 'instruct', 'fudge'])
+    parser.add_argument('--method', default='act', choices=['baseline', 'ours', 'act', 'actadd', 'instruct', 'fudge'])
     parser.add_argument('--liseco_lower', type=float, default=0.0)
     parser.add_argument('--liseco_upper', type=float, default=0.3)
     parser.add_argument('--liseco_map', default='sigmoid', choices=['sigmoid', 'tanh', 'identity'])
@@ -58,15 +58,20 @@ if __name__ == "__main__":
     print(args)
 
     # Load the dataset
-    generations = load_results_json(args)
+    _, generations_df = load_generations(args)
 
-    generations = [generations[gen]['generated_text'] for gen in generations]
+    results = {}
+    for setting in generations_df['strength'].unique():
+        setting_df = generations_df[generations_df['strength']==setting]
+        generations = list(setting_df['generation'])
 
-    samples, ratings = terminal_ui(generations)
+        samples, ratings = terminal_ui(generations)
+        mean_rating = np.mean(ratings)
+        std_rating = np.std(ratings)
+        results[setting] = {'mean': mean_rating, 'std': std_rating}
 
-    print('Mean rating: ', np.mean(ratings))
-    print('Std rating: ', np.std(ratings))
+    print('Overall results: ', results)
 
     # Save the ratings
-    ratings_df = pd.DataFrame({'sample': samples, 'rating': ratings})
-    ratings_df.to_csv('human_ratings.csv', index=False)
+    with open(f'{args.method}_human_ratings.json', 'w') as f:
+        json.dump(results, f)
