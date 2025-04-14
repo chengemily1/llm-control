@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=probe_training
+#SBATCH --job-name=id_computation
 #SBATCH --partition=alien
 #SBATCH --qos=alien
 #SBATCH --nodes=1
@@ -19,12 +19,14 @@ source ~/.bashrc;
 conda activate control;
 cd /home/echeng/llm-control;
 
-python3 src/train_probe.py \
-        --model_name $MODEL \
-        --layer $LAYER \
-        --save 1 \
-        --config /home/echeng/llm-control/src/config.json \
-        --num_epochs 10000 \
-        --random_seed 0 \
-        --experiment toxicity \
-        --objective classification
+python3 src/main.py \
+    --model_name $MODEL \
+    --experiment $EXP \
+    --method $METHOD \
+    --liseco_lower 0 \
+    --liseco_upper $P \
+    --liseco_map sigmoid \
+    --c $C \
+    --l $L \
+    --s $S \
+    --config src/config.json

@@ -35,7 +35,7 @@ def terminal_ui(generations):
     print('Press enter to continue...')
     input()
 
-    samples = random.sample(generations, 50)
+    samples = random.sample(generations, 30)
     ratings = []
     for j, gen in enumerate(samples):
         print(f'{j+1}/{len(samples)}: {gen}')

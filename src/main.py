@@ -36,6 +36,7 @@ parser.add_argument('--liseco_map', default='sigmoid', choices=['sigmoid', 'tanh
 parser.add_argument('--c', help="Actadd intervention strength", type=float, default=3)
 parser.add_argument('--l', default=6, type=int)
 parser.add_argument('--s', default=None, type=float)
+parser.add_argument('--downsample', default=1, type=float)
 parser.add_argument('--config', default='config.json', help='path to config file')
 args = parser.parse_args()
 
@@ -81,7 +82,7 @@ Ws = [
 [W.eval() for W in Ws]
 
 # Load the dataset
-dataset = pd.read_csv(args.dataset_name).head(100)
+dataset = pd.read_csv(args.dataset_name)
 text_field = 'prompt'
 data = list(dataset[text_field])
 
@@ -144,6 +145,7 @@ def retrofit_model(Ws):
 retrofit_model(Ws)
 
 results_dict = {}
+selected_layers = list(range(8, num_layers))
 
 for i, datum in tqdm(enumerate(data)):
     encoding = encode_data(tokenizer, 1, [datum], 1, model.config.max_position_embeddings, args.device)[0]
@@ -155,7 +157,7 @@ for i, datum in tqdm(enumerate(data)):
         results_dict[data[i]][layer] =  {}
 
     if args.method == 'ours':
-        for layer in range(num_layers):
+        for layer in selected_layers:
             layerlist[layer].control_on()
     else:
         for layer in range(num_layers):
@@ -216,5 +218,5 @@ if not os.path.exists(f'{YOUR_PATH}/experiments/{args.experiment}/control_result
 
 print(results_dict)
 
-with open(f'{YOUR_PATH}/experiments/{args.experiment}/control_results/{args.model_name.split("/")[-1]}_low_{args.liseco_lower}_high_{args.liseco_upper}_{args.method}_downsample_0.1.json', 'w') as f:
+with open(f'{YOUR_PATH}/experiments/{args.experiment}/control_results/{args.model_name.split("/")[-1]}_low_{args.liseco_lower}_high_{args.liseco_upper}_{args.method}{f"_downsample_{args.downsample}" if args.downsample<1 else ""}.json', 'w') as f:
     json.dump(results_dict, f)
