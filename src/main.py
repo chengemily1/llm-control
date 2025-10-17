@@ -85,7 +85,7 @@ text_field = 'prompt'
 data = list(dataset[text_field])
 
 if args.experiment == 'toxicity':
-    data_str = 'jigsaw-toxic-comment-classification-challenge'
+    data_str = 'toxicity-constraint-set'
     column = 'text'
 elif args.experiment == 'sentiment':
     data_str = 'sentiment-constraint-set'

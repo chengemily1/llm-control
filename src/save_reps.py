@@ -9,7 +9,7 @@ from tqdm import tqdm
 import os
 import pdb
 
-parser = argparse.ArgumentParser(description='ID computation')
+parser = argparse.ArgumentParser(description='Representations computation + saving')
 
 # Data selection
 parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3-8B")
@@ -26,7 +26,7 @@ print(args)
 if args.experiment == 'sentiment':
     args.dataset_name = '/home/echeng/llm-control/sentiment-constraint-set'
 elif args.experiment == 'toxicity':
-    args.dataset_name = '/home/echeng/llm-control/jigsaw-toxic-comment-classification-challenge'
+    args.dataset_name = '/home/echeng/llm-control/toxicity-constraint-set'
 elif args.experiment == 'formality':
     args.dataset_name = '/home/echeng/llm-control/formality-constraint-set'
 
@@ -38,7 +38,7 @@ ACCESS_TOKEN = CONFIG['hf_access_token']
 YOUR_PATH = CONFIG['path']
 
 # Load the model and tokenizer
-tokenizer = AutoTokenizer.from_pretrained(args.model_name, 
+tokenizer = AutoTokenizer.from_pretrained(args.model_name,
                                           token=ACCESS_TOKEN,
                                           trust_remote_code=True,
                                           )
@@ -63,11 +63,11 @@ model.eval()
 def balance_labels(label_name, df):
     labels = df[label_name]
     minority = 1 if sum(labels) < 0.5 * len(labels) else 0
-    
+
     # get all the minority labels
     minority_df = df[df[label_name] == minority]
     majority_df = df[df[label_name] == (1 if not minority else 0)].sample(len(minority_df))
-    
+
     return pd.concat([minority_df, majority_df])
 
 if not os.path.exists(args.dataset_name + '/train_shuffled_balanced.csv'):
@@ -153,7 +153,7 @@ else:
     head_embeds = []
     with torch.no_grad():
         for i, prompt in tqdm(enumerate(encodings)):
-            prompt = prompt['input_ids']        
+            prompt = prompt['input_ids']
             with TraceDict(model, HEADS) as ret:
                 output = model(prompt)
             head_wise_hidden_states = [ret[head].output.squeeze().detach().cpu() for head in HEADS]
