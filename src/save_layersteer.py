@@ -13,14 +13,19 @@ from data_util import encode_data
 parser = argparse.ArgumentParser(description='ID computation')
 
 # Data selection
-parser.add_argument('--model_name', type=str, default="meta-llama/Llama-2-7b-hf")
+parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3-8B")
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--device', type=str, default='cuda')
 parser.add_argument('--experiment', default='sentiment')
+parser.add_argument('--config', default='config.json', help='path to config file')
 args = parser.parse_args()
 print(args)
 
-ACCESS_TOKEN='YOUR TOKEN'
+with open(args.config, 'r') as f:
+    CONFIG = json.load(f)
+
+ACCESS_TOKEN = CONFIG['hf_access_token']
+YOUR_PATH = CONFIG['path']
 
 # Load the model and tokenizer
 tokenizer = AutoTokenizer.from_pretrained(args.model_name, 
@@ -74,4 +79,9 @@ with torch.no_grad():
         steer = representation[1,:] - representation[0,:] # target - source
         steers.append(steer)
     print(len(steers))
-    torch.save(steers, f'/home/echeng/llm-control/experiments/{args.experiment}/saved_layersteers/{args.model_name.split("/")[-1]}_steers.pt')
+
+    # if the path doesn't exist, create it
+    if not os.path.exists(f'{YOUR_PATH}/experiments/{args.experiment}/saved_layersteers'):
+        os.makedirs(f'{YOUR_PATH}/experiments/{args.experiment}/saved_layersteers')
+
+    torch.save(steers, f'{YOUR_PATH}/experiments/{args.experiment}/saved_layersteers/{args.model_name.split("/")[-1]}_steers.pt')

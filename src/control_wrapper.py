@@ -127,7 +127,11 @@ class LiSeCoWrapper(LiSeCoBaseWrapper):
 
     def forward(self, x, *args, **kwargs):
         t = time.time()
-        x_seq, x_metadata = self.base_layer(x, *args, **kwargs)
+        result = self.base_layer(x, *args, **kwargs)
+
+        x_seq, x_metadata = result[0], None if len(result) == 1 else result
+        # print('print what x seq is')
+        # pdb.set_trace()
 
         # Add the toxicity score to the log
         if 'position_ids' in kwargs:

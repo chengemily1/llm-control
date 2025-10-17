@@ -48,9 +48,6 @@ with open(args.config, 'r') as f:
 ACCESS_TOKEN = CONFIG['hf_access_token']
 YOUR_PATH = CONFIG['path']
 
-args.dataset_name = f'{YOUR_PATH}/experiments/test_{exp}.csv' # last minute switch
-
-
 # Load the model and tokenizer
 tokenizer = AutoTokenizer.from_pretrained(args.model_name, token=ACCESS_TOKEN)
 model = AutoModelForCausalLM.from_pretrained(args.model_name,
@@ -72,19 +69,31 @@ model.eval()
 
 # Load all linear probes
 num_layers = model.config.num_hidden_layers
+downsample_str = f"_downsample_{args.downsample}" if args.downsample < 1 else ""
 
 Ws = [
     torch.load(
-        f'{YOUR_PATH}/experiments/{args.experiment}/saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}_rs0{"_downsample_0.1" if args.experiment in ("formality", "sentiment") else ""}.pt'
+        f'{YOUR_PATH}/experiments/{args.experiment}/saved_probes/{args.model_name.split("/")[-1]}_linear_probe_layer_{layer}_rs0{downsample_str}.pt', weights_only=False
         ).to(args.device)
     for layer in range(1, num_layers+1)
 ]
 [W.eval() for W in Ws]
 
-# Load the dataset
+# Load the dataset: sample 1000 sentences and form 10-word prompts from the train set.
 dataset = pd.read_csv(args.dataset_name)
 text_field = 'prompt'
 data = list(dataset[text_field])
+
+if args.experiment == 'toxicity':
+    data_str = 'jigsaw-toxic-comment-classification-challenge'
+    column = 'text'
+elif args.experiment == 'sentiment':
+    data_str = 'sentiment-constraint-set'
+    column = 'truncated_text'
+
+data = pd.read_csv(f'./{data_str}/train_shuffled_balanced.csv').sample(1000)[column]
+data = [' '.join(sentence.split()[:10]) for sentence in data]
+
 
 if args.method == 'instruct':
     data = transform_dataset(data, args.experiment, 0, S=args.s)
@@ -144,17 +153,17 @@ def retrofit_model(Ws):
 
 retrofit_model(Ws)
 
-results_dict = {}
+results_dict = [None] * len(data)
 selected_layers = list(range(8, num_layers))
 
 for i, datum in tqdm(enumerate(data)):
     encoding = encode_data(tokenizer, 1, [datum], 1, model.config.max_position_embeddings, args.device)[0]
 
-    results_dict[datum] = {}
+    results_dict[i] = {}
     retrofit_model(Ws)
 
     for layer in range(num_layers):
-        results_dict[data[i]][layer] =  {}
+        results_dict[i][layer] =  {}
 
     if args.method == 'ours':
         for layer in selected_layers:
@@ -167,7 +176,6 @@ for i, datum in tqdm(enumerate(data)):
         layerlist[layer].reset_logs()
 
     # Generate output
-
     try:
         if args.method == 'fudge':
             lm_head.store_batch_prompts([datum])
@@ -184,6 +192,7 @@ for i, datum in tqdm(enumerate(data)):
         )
     except IndexError:
         continue
+
     generated_tokens = outputs.sequences
     transition_scores = model.compute_transition_scores(
         outputs.sequences, outputs.scores, normalize_logits=True
@@ -192,31 +201,34 @@ for i, datum in tqdm(enumerate(data)):
     # Surface forms log: the text generated + surprisal
     generated_tokens_text = [tokenizer.decode(token) for token in generated_tokens[0]]
     surprisals = [-float(score.cpu().numpy()) for score in transition_scores[0]]
-    results_dict[data[i]]['generated_text'] = tokenizer.decode(*outputs[0], skip_special_tokens=True)
-    results_dict[data[i]]['token'] = generated_tokens_text
-    results_dict[data[i]]['surprisal'] = surprisals
+    results_dict[i]['generated_text'] = tokenizer.decode(*outputs[0], skip_special_tokens=True)
+    results_dict[i]['token'] = generated_tokens_text
+    results_dict[i]['surprisal'] = surprisals
 
-    print(f'Prompt:{data[i]}\nGenerated:{results_dict[data[i]]["generated_text"]}')
+    print(f'Prompt:{data[i]}\nGenerated:{results_dict[i]["generated_text"]}')
 
     # Semantic scores log:
     for layer in range(num_layers):
         pre_adjust_scores = layerlist[layer].pre_adjust_toxicity_log.copy()
         post_adjust_scores = layerlist[layer].post_adjust_toxicity_log.copy()
         latency = layerlist[layer].latency.copy()
-        results_dict[data[i]][layer]['pre_adjust_toxicity_prob'] = pre_adjust_scores
-        results_dict[data[i]][layer]['post_adjust_toxicity_prob'] = post_adjust_scores
-        results_dict[data[i]][layer]['inference_latency'] = latency
+        results_dict[i][layer]['pre_adjust_toxicity_prob'] = pre_adjust_scores
+        results_dict[i][layer]['post_adjust_toxicity_prob'] = post_adjust_scores
+        results_dict[i][layer]['inference_latency'] = latency
 
 # Save data
 if args.method == 'actadd':
     args.method = args.method + f'_c{args.c}_l{args.l}'
 if args.method == 'fudge':
     results_dict['overall_latency'] = lm_head.latency
+if args.method == 'ours':
+    args.method = args.method + f'_lower_{args.liseco_lower}_upper_{args.liseco_upper}_map_{args.liseco_map}'
+
 
 if not os.path.exists(f'{YOUR_PATH}/experiments/{args.experiment}/control_results/'):
     os.makedirs(f'{YOUR_PATH}/experiments/{args.experiment}/control_results/')
 
-print(results_dict)
+print(f'Saving results to {YOUR_PATH}/experiments/{args.experiment}/control_results')
 
-with open(f'{YOUR_PATH}/experiments/{args.experiment}/control_results/{args.model_name.split("/")[-1]}_low_{args.liseco_lower}_high_{args.liseco_upper}_{args.method}{f"_downsample_{args.downsample}" if args.downsample<1 else ""}.json', 'w') as f:
+with open(f'{YOUR_PATH}/experiments/{args.experiment}/control_results/{args.model_name.split("/")[-1]}_{args.method}{f"_downsample_{args.downsample}" if args.downsample<1 else ""}.json', 'w') as f:
     json.dump(results_dict, f)

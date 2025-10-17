@@ -13,7 +13,6 @@ parser = argparse.ArgumentParser(description='ID computation')
 
 # Data selection
 parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3-8B")
-parser.add_argument('--dataset_name', type=str, default='/home/echeng/llm-control/jigsaw-toxic-comment-classification-challenge')
 parser.add_argument('--attn', type=int, default=0)
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--device', type=str, default='cuda')
@@ -22,6 +21,14 @@ parser.add_argument('--config', type=str, default='/home/echeng/llm-control/src/
 
 args = parser.parse_args()
 print(args)
+
+# Set the dataset path
+if args.experiment == 'sentiment':
+    args.dataset_name = '/home/echeng/llm-control/sentiment-constraint-set'
+elif args.experiment == 'toxicity':
+    args.dataset_name = '/home/echeng/llm-control/jigsaw-toxic-comment-classification-challenge'
+elif args.experiment == 'formality':
+    args.dataset_name = '/home/echeng/llm-control/formality-constraint-set'
 
 ### CONFIG and LOADING
 with open(args.config, 'r') as f:
@@ -103,10 +110,10 @@ def encode_data(tokenizer, N, data, batch_size, max_length, device, last_k=None)
 
     return encodings
 
-dataset = pd.read_csv(args.dataset_name + '/train_shuffled_balanced.csv')#.iloc[:3000]
-# data = list(dataset['text'])
+dataset = pd.read_csv(args.dataset_name + '/train_shuffled_balanced.csv')
+
 text_col = {
-    'toxicity': 'comment_text', 'sentiment': 'text', 'formality': 'sentence'
+    'toxicity': 'comment_text', 'sentiment': 'truncated_text', 'formality': 'sentence'
 }
 
 data = list(dataset[text_col[args.experiment]])
@@ -132,7 +139,7 @@ if not args.attn:
         representations = [torch.cat(batches, dim=0) for batches in representations]
         print('Layer 1 reps shape: ')
         print(representations[1].shape)
-        torch.save(representations, f'YOUR_PATH/experiments/{args.experiment}/saved_reps/{args.model_name.split("/")[-1]}_reps.pt')
+        torch.save(representations, f'{YOUR_PATH}/experiments/{args.experiment}/saved_reps/{args.model_name.split("/")[-1]}_reps.pt')
 else:
     encodings = []
     for datum in data:

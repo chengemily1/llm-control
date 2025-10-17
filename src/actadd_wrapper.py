@@ -18,7 +18,13 @@ class ActAddWrapper(torch.nn.Module):
         self.c = c
 
     def forward(self, x, *args, **kwargs):
-        x_seq, x_metadata = self.base_layer(x, *args, **kwargs)
+        result = self.base_layer(x, *args, **kwargs)
+        if len(result) == 1:
+            x_seq = result[0]
+            x_metadata = None
+        else:
+            x_seq = result[0]
+            x_metadata = result[1]
 
         # Add at the first token as in App B of the paper.        
         x_seq[torch.arange(x_seq.size(0)),0] += self.c * self.layer_steer
